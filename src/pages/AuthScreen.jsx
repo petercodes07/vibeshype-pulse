@@ -46,10 +46,14 @@ export default function AuthScreen() {
     } catch (err) {
       if (tab === 'signup' && err.status === 409) {
         setConflictEmail(true)
+      } else if (err.name === 'AbortError' || !err.status) {
+        setError('Could not reach the server. Check your connection.')
+      } else if (tab === 'login' && err.status === 401) {
+        setError('Incorrect email or password.')
+      } else if (tab === 'login') {
+        setError('Login failed. Please try again.')
       } else {
-        setError(tab === 'login'
-          ? 'Incorrect email or password.'
-          : 'Could not create account. Please try again.')
+        setError('Could not create account. Please try again.')
       }
     } finally {
       setLoading(false)

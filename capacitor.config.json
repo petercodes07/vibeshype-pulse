@@ -1,0 +1,13 @@
+{
+  "appId": "com.vibeshype.pulse",
+  "appName": "VibeShype Pulse",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https"
+  },
+  "plugins": {
+    "PushNotifications": {
+      "presentationOptions": ["badge", "sound", "alert"]
+    }
+  }
+}

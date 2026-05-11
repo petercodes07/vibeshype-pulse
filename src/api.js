@@ -24,9 +24,10 @@ async function req(path, opts = {}) {
 }
 
 export const auth = {
-  me:     ()                => req('/api/auth/me'),
-  login:  (email, password) => req('/api/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) }),
-  logout: ()                => req('/api/auth/logout', { method: 'POST' }),
+  me:       ()                        => req('/api/auth/me'),
+  login:    (email, password)         => req('/api/auth/login',  { method: 'POST', body: JSON.stringify({ email, password }) }),
+  signup:   (email, password, name)   => req('/api/auth/signup', { method: 'POST', body: JSON.stringify({ email, password, name }) }),
+  logout:   ()                        => req('/api/auth/logout', { method: 'POST' }),
 }
 
 export const pulse = {

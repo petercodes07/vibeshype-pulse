@@ -28,6 +28,15 @@ export function AuthProvider({ children }) {
     return data
   }
 
+  async function signup(email, password, name) {
+    const data = await auth.signup(email, password, name)
+    const token = data.token
+    if (!token) throw new Error('No token returned from server.')
+    storage.set('pulse_token', token)
+    setUser(data.user ?? { email, name })
+    return data
+  }
+
   async function logout() {
     auth.logout().catch(() => {})
     storage.remove('pulse_token')
@@ -36,7 +45,7 @@ export function AuthProvider({ children }) {
   }
 
   return (
-    <Ctx.Provider value={{ user, login, logout, loading: user === undefined }}>
+    <Ctx.Provider value={{ user, login, signup, logout, loading: user === undefined }}>
       {children}
     </Ctx.Provider>
   )

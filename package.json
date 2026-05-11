@@ -8,6 +8,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "electron:dev": "concurrently \"vite\" \"wait-on http://localhost:5173 && electron .\"",
+    "postinstall": "codesign --force --deep --sign - node_modules/electron/dist/Electron.app 2>/dev/null || true",
     "electron:build": "vite build && electron-builder",
     "cap:sync": "cap sync",
     "cap:ios": "cap open ios",
@@ -28,7 +29,7 @@
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.1",
     "concurrently": "^9.0.0",
-    "electron": "^33.0.0",
+    "electron": "^42.0.1",
     "electron-builder": "^25.0.0",
     "eslint": "^10.3.0",
     "eslint-plugin-react-hooks": "^7.1.1",
@@ -40,10 +41,21 @@
   "build": {
     "appId": "com.vibeshype.pulse",
     "productName": "VibeShype Pulse",
-    "directories": { "output": "dist-electron" },
-    "files": ["dist/**/*", "electron/**/*"],
-    "mac": { "category": "public.app-category.music" },
-    "win": { "target": "nsis" },
-    "linux": { "target": "AppImage" }
+    "directories": {
+      "output": "dist-electron"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*"
+    ],
+    "mac": {
+      "category": "public.app-category.music"
+    },
+    "win": {
+      "target": "nsis"
+    },
+    "linux": {
+      "target": "AppImage"
+    }
   }
 }

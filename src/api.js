@@ -16,7 +16,11 @@ async function req(path, opts = {}) {
       },
       ...opts,
     })
-    if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
+    if (!res.ok) {
+      const err = new Error(`${res.status} ${res.statusText}`)
+      err.status = res.status
+      throw err
+    }
     return res.json()
   } finally {
     clearTimeout(timer)
@@ -24,10 +28,11 @@ async function req(path, opts = {}) {
 }
 
 export const auth = {
-  me:       ()                        => req('/api/auth/me'),
-  login:    (email, password)         => req('/api/auth/login',  { method: 'POST', body: JSON.stringify({ email, password }) }),
-  signup:   (email, password, name)   => req('/api/auth/signup', { method: 'POST', body: JSON.stringify({ email, password, name }) }),
-  logout:   ()                        => req('/api/auth/logout', { method: 'POST' }),
+  me:       ()                                    => req('/api/auth/me'),
+  updateMe: (fields)                              => req('/api/auth/me',       { method: 'PATCH', body: JSON.stringify(fields) }),
+  login:    (email, password)                     => req('/api/auth/login',    { method: 'POST',  body: JSON.stringify({ email, password }) }),
+  register: (email, password, emailOptIn = false) => req('/api/auth/register', { method: 'POST',  body: JSON.stringify({ email, password, acceptedTerms: true, emailOptIn }) }),
+  logout:   ()                                    => req('/api/auth/logout',   { method: 'POST' }),
 }
 
 export const pulse = {

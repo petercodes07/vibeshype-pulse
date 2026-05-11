@@ -28,12 +28,12 @@ export function AuthProvider({ children }) {
     return data
   }
 
-  async function signup(email, password, name) {
-    const data = await auth.signup(email, password, name)
+  async function register(email, password, emailOptIn) {
+    const data = await auth.register(email, password, emailOptIn)
     const token = data.token
     if (!token) throw new Error('No token returned from server.')
     storage.set('pulse_token', token)
-    setUser(data.user ?? { email, name })
+    setUser(data.user ?? { email })
     return data
   }
 
@@ -45,7 +45,7 @@ export function AuthProvider({ children }) {
   }
 
   return (
-    <Ctx.Provider value={{ user, login, signup, logout, loading: user === undefined }}>
+    <Ctx.Provider value={{ user, login, register, logout, loading: user === undefined }}>
       {children}
     </Ctx.Provider>
   )

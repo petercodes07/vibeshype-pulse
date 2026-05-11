@@ -1,16 +1,56 @@
-# React + Vite
+# VibeShype Pulse
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A desktop application built with Electron, React, and Vite.
 
-Currently, two official plugins are available:
+## Prerequisites
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- [Node.js](https://nodejs.org/) (v18 or higher)
 
-## React Compiler
+## Installation
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+```bash
+npm install
+```
 
-## Expanding the ESLint configuration
+> If the Electron binary download times out, set a mirror and retry:
+>
+> ```bash
+> set ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/
+> npm install
+> ```
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+## Running the App
+
+```bash
+npm run electron:dev
+```
+
+This starts the Vite dev server and launches the Electron window.
+
+## Build for Production
+
+```bash
+npm run electron:build
+```
+
+The packaged output will be in the `dist-electron/` folder.
+
+## Mobile (Capacitor)
+
+Sync web assets to native projects:
+
+```bash
+npm run cap:sync
+```
+
+Open in Android Studio:
+
+```bash
+npm run cap:android
+```
+
+Open in Xcode:
+
+```bash
+npm run cap:ios
+```

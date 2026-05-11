@@ -2,21 +2,46 @@ import { useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 
 export default function AuthScreen() {
-  const { login } = useAuth()
+  const { login, signup } = useAuth()
+  const [tab, setTab] = useState('login') // 'login' | 'signup'
+
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [name, setName] = useState('')
+  const [confirm, setConfirm] = useState('')
   const [error, setError] = useState(null)
   const [loading, setLoading] = useState(false)
 
-  async function handleLogin(e) {
-    e.preventDefault()
-    if (!email.trim() || !password.trim()) return
+  function switchTab(t) {
+    setTab(t)
     setError(null)
+    setEmail('')
+    setPassword('')
+    setName('')
+    setConfirm('')
+  }
+
+  async function handleSubmit(e) {
+    e.preventDefault()
+    setError(null)
+
+    if (tab === 'signup') {
+      if (!name.trim()) return setError('Please enter your name.')
+      if (password.length < 8) return setError('Password must be at least 8 characters.')
+      if (password !== confirm) return setError('Passwords do not match.')
+    }
+
     setLoading(true)
     try {
-      await login(email, password)
+      if (tab === 'login') {
+        await login(email, password)
+      } else {
+        await signup(email, password, name)
+      }
     } catch {
-      setError('Incorrect email or password. Check your vibeshype.com credentials.')
+      setError(tab === 'login'
+        ? 'Incorrect email or password.'
+        : 'Could not create account. That email may already be in use.')
     } finally {
       setLoading(false)
     }
@@ -34,14 +59,59 @@ export default function AuthScreen() {
 
         <div style={{ flex: 1, display: 'flex', alignItems: 'center' }}>
           <div style={{ width: '100%' }}>
-            <div style={{ fontSize: 20, fontWeight: 800, marginBottom: 6, letterSpacing: '-0.4px' }}>
-              Log in to Pulse
-            </div>
-            <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 24, lineHeight: 1.6 }}>
-              Use your <strong style={{ color: 'var(--light)' }}>vibeshype.com</strong> email and password.
+
+            {/* Tabs */}
+            <div style={{
+              display: 'flex',
+              background: 'var(--surface)',
+              borderRadius: 'var(--radius-sm)',
+              padding: 3,
+              marginBottom: 24,
+              border: '1px solid var(--border)',
+            }}>
+              {['login', 'signup'].map(t => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => switchTab(t)}
+                  style={{
+                    flex: 1,
+                    padding: '8px 0',
+                    borderRadius: 'calc(var(--radius-sm) - 2px)',
+                    background: tab === t ? 'var(--accent)' : 'transparent',
+                    color: tab === t ? '#fff' : 'var(--muted)',
+                    fontWeight: 700,
+                    fontSize: 13,
+                    border: 'none',
+                    cursor: 'pointer',
+                    transition: 'background 0.15s, color 0.15s',
+                  }}
+                >
+                  {t === 'login' ? 'Log in' : 'Sign up'}
+                </button>
+              ))}
             </div>
 
-            <form onSubmit={handleLogin}>
+            <form onSubmit={handleSubmit}>
+              {tab === 'signup' && (
+                <div className="input-wrap">
+                  <input
+                    type="text"
+                    placeholder="Full name"
+                    value={name}
+                    onChange={e => setName(e.target.value)}
+                    autoComplete="name"
+                    autoFocus
+                  />
+                  <span className="input-icon">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="12" cy="8" r="4"/>
+                      <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/>
+                    </svg>
+                  </span>
+                </div>
+              )}
+
               <div className="input-wrap">
                 <input
                   type="email"
@@ -49,7 +119,7 @@ export default function AuthScreen() {
                   value={email}
                   onChange={e => setEmail(e.target.value)}
                   autoComplete="email"
-                  autoFocus
+                  autoFocus={tab === 'login'}
                 />
                 <span className="input-icon">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -65,7 +135,7 @@ export default function AuthScreen() {
                   placeholder="Password"
                   value={password}
                   onChange={e => setPassword(e.target.value)}
-                  autoComplete="current-password"
+                  autoComplete={tab === 'login' ? 'current-password' : 'new-password'}
                 />
                 <span className="input-icon">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -74,6 +144,23 @@ export default function AuthScreen() {
                   </svg>
                 </span>
               </div>
+
+              {tab === 'signup' && (
+                <div className="input-wrap">
+                  <input
+                    type="password"
+                    placeholder="Confirm password"
+                    value={confirm}
+                    onChange={e => setConfirm(e.target.value)}
+                    autoComplete="new-password"
+                  />
+                  <span className="input-icon">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/>
+                    </svg>
+                  </span>
+                </div>
+              )}
 
               {error && (
                 <div style={{
@@ -91,32 +178,11 @@ export default function AuthScreen() {
                 className="btn-primary"
                 disabled={!email.trim() || !password.trim() || loading}
               >
-                {loading ? 'Logging in…' : 'Log in →'}
+                {loading
+                  ? (tab === 'login' ? 'Logging in…' : 'Creating account…')
+                  : (tab === 'login' ? 'Log in →' : 'Create account →')}
               </button>
             </form>
-
-            <div style={{ height: 1, background: 'var(--border)', margin: '24px 0' }} />
-
-            <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: 13, color: 'var(--gray)', marginBottom: 12 }}>
-                Don't have a vibeshype account yet?
-              </div>
-              <a
-                href="https://vibeshype.com/signup"
-                target="_blank"
-                rel="noreferrer"
-                style={{
-                  display: 'inline-block',
-                  padding: '11px 24px',
-                  border: '1.5px solid var(--border)',
-                  borderRadius: 'var(--radius-sm)',
-                  fontSize: 14, fontWeight: 600, color: 'var(--light)',
-                  transition: 'border-color 0.15s',
-                }}
-              >
-                Create a free account →
-              </a>
-            </div>
           </div>
         </div>
 

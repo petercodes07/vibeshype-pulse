@@ -1,13 +1,16 @@
 import { storage } from './storage'
 
-const BASE = import.meta.env.VITE_API_URL || 'https://vibeshype.com'
+const BASE = import.meta.env.VITE_API_URL || ''
 
 async function req(path, opts = {}) {
   const token = storage.get('pulse_token')
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), 4000)
+  const url = `${BASE}${path}`
+  const method = opts.method || 'GET'
+  console.log(`[api] → ${method} ${url}`)
   try {
-    const res = await fetch(`${BASE}${path}`, {
+    const res = await fetch(url, {
       signal: controller.signal,
       headers: {
         'Content-Type': 'application/json',
@@ -16,12 +19,20 @@ async function req(path, opts = {}) {
       },
       ...opts,
     })
+    console.log(`[api] ← ${method} ${url} ${res.status}`)
     if (!res.ok) {
       const err = new Error(`${res.status} ${res.statusText}`)
       err.status = res.status
       throw err
     }
     return res.json()
+  } catch (err) {
+    if (err.name === 'AbortError') {
+      console.error(`[api] TIMEOUT ${method} ${url} (>4000ms)`)
+    } else {
+      console.error(`[api] ERROR ${method} ${url}`, err.message)
+    }
+    throw err
   } finally {
     clearTimeout(timer)
   }

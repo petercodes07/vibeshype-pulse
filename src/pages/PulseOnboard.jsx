@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { pulse } from '../api'
 import { storage } from '../storage'
+import { Tv, Film, Target, Check } from 'lucide-react'
 
 const STEPS = ['Channel', 'Profile', 'Peers', 'Done']
 
@@ -128,7 +129,7 @@ function StepChannel({ url, onChange, onSubmit, loading }) {
           onKeyDown={e => e.key === 'Enter' && onSubmit()}
           autoFocus
         />
-        <span className="input-icon">📺</span>
+        <span className="input-icon"><Tv size={15} strokeWidth={1.75} /></span>
       </div>
       <button
         className="btn-primary"
@@ -152,8 +153,8 @@ function StepProfile({ profile, onNext }) {
       <div className="profile-section">
         <div className="profile-section-label">Channel</div>
         <div className="profile-chips">
-          <span className="profile-chip highlight">📺 {profile.channelName}</span>
-          <span className="profile-chip green">🎬 {profile.format}</span>
+          <span className="profile-chip highlight"><Tv size={12} strokeWidth={1.75} /> {profile.channelName}</span>
+          <span className="profile-chip green"><Film size={12} strokeWidth={1.75} /> {profile.format}</span>
         </div>
       </div>
 
@@ -214,7 +215,7 @@ function StepPeers({ peers, selected, onToggle, onConfirm, loading }) {
               <div className="peer-subs">{peer.subs} subscribers</div>
             </div>
             <div className="peer-check">
-              {selected.has(peer.channelId) ? '✓' : ''}
+              {selected.has(peer.channelId) ? <Check size={16} strokeWidth={2.5} /> : ''}
             </div>
           </div>
         ))}
@@ -234,7 +235,7 @@ function StepPeers({ peers, selected, onToggle, onConfirm, loading }) {
 function StepDone({ onFinish }) {
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', gap: 16 }}>
-      <div style={{ fontSize: 64 }}>🎯</div>
+      <Target size={64} strokeWidth={1.25} style={{ color: 'var(--primary)' }} />
       <div className="onboard-heading" style={{ marginBottom: 0 }}>You're all set.</div>
       <div className="onboard-sub" style={{ marginBottom: 0 }}>
         Your first picks are being generated now. We'll notify you every morning at 7am with today's best songs to post.

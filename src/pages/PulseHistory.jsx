@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { pulse } from '../api'
+import { BarChart2, Music2 } from 'lucide-react'
 
 const MOCK_HISTORY = [
   {
@@ -85,7 +86,7 @@ export default function PulseHistory() {
         </div>
       ) : items.length === 0 ? (
         <div style={{ margin: '40px 20px', textAlign: 'center', color: 'var(--gray)' }}>
-          <div style={{ fontSize: 48, marginBottom: 12 }}>📊</div>
+          <div style={{ marginBottom: 12 }}><BarChart2 size={48} strokeWidth={1.25} style={{ color: 'var(--muted)' }} /></div>
           <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--light)', marginBottom: 6 }}>No results yet</div>
           <div style={{ fontSize: 13 }}>Accept a pick and post it — results appear here after 24 hours.</div>
         </div>
@@ -128,7 +129,7 @@ function HistoryItem({ item }) {
     <div className="history-item">
       <div className="history-item-top">
         <div className="history-cover">
-          {item.cover ? <img src={item.cover} alt="" style={{ width: 80, height: 80, objectFit: 'cover' }} /> : '🎵'}
+          {item.cover ? <img src={item.cover} alt="" style={{ width: 80, height: 80, objectFit: 'cover' }} /> : <Music2 size={28} strokeWidth={1.5} style={{ color: 'var(--muted)' }} />}
         </div>
         <div className="history-body">
           <div className="history-title-text">{item.title}</div>

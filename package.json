@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "electron:dev": "concurrently \"vite\" \"wait-on http://localhost:5173 && electron .\"",
+    "electron:dev": "fuser -k 5173/tcp 2>/dev/null; concurrently \"vite\" \"wait-on http://localhost:5173 && electron .\"",
     "postinstall": "codesign --force --deep --sign - node_modules/electron/dist/Electron.app 2>/dev/null || true",
     "electron:build": "vite build && electron-builder",
     "cap:sync": "cap sync",
@@ -19,6 +19,7 @@
     "@capacitor/core": "^6.0.0",
     "@capacitor/ios": "^6.0.0",
     "@capacitor/push-notifications": "^6.0.0",
+    "lucide-react": "^1.14.0",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
     "react-router-dom": "^7.0.0"

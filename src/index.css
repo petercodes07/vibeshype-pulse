@@ -53,7 +53,7 @@ button { cursor: pointer; font-family: inherit; border: none; background: none; 
   transition: color 0.15s;
 }
 .nav-item.active { color: var(--primary); }
-.nav-icon { font-size: 22px; line-height: 1; }
+.nav-icon { display: block; }
 
 /* ── Pick card ── */
 .pick-card {
@@ -72,7 +72,7 @@ button { cursor: pointer; font-family: inherit; border: none; background: none; 
   width: 100%; aspect-ratio: 1/1;
   background: linear-gradient(135deg, #2a2a2a, #1a1a1a);
   display: flex; align-items: center; justify-content: center;
-  font-size: 72px;
+  color: var(--muted);
 }
 .pick-rank {
   position: absolute; top: 12px; left: 12px;
@@ -116,7 +116,8 @@ button { cursor: pointer; font-family: inherit; border: none; background: none; 
   padding: 13px 8px;
   background: var(--primary); color: #fff;
   border-radius: var(--radius-sm);
-  font-size: 14px; font-weight: 700; text-align: center;
+  font-size: 14px; font-weight: 700;
+  display: flex; align-items: center; justify-content: center; gap: 6px;
   transition: opacity 0.15s;
 }
 .btn-post:hover { opacity: 0.85; }
@@ -124,14 +125,16 @@ button { cursor: pointer; font-family: inherit; border: none; background: none; 
   padding: 13px 8px;
   background: var(--surface2);
   border-radius: var(--radius-sm);
-  font-size: 13px; font-weight: 600; text-align: center;
+  font-size: 13px; font-weight: 600;
+  display: flex; align-items: center; justify-content: center; gap: 6px;
   transition: background 0.15s;
 }
 .btn-skip:hover, .btn-dismiss:hover { background: #333; }
 
 .pick-expand-btn {
   width: 100%; padding: 10px;
-  text-align: center; font-size: 12px; color: var(--gray);
+  display: flex; align-items: center; justify-content: center; gap: 4px;
+  font-size: 12px; color: var(--gray);
   border-top: 1px solid var(--border);
   transition: color 0.15s;
 }
@@ -164,7 +167,7 @@ button { cursor: pointer; font-family: inherit; border: none; background: none; 
 .today-sub { font-size: 13px; color: var(--muted); margin-top: 4px; margin-bottom: 20px; }
 
 .picks-empty { margin: 40px 20px; text-align: center; color: var(--gray); }
-.picks-empty-icon { font-size: 48px; margin-bottom: 12px; }
+.picks-empty-icon { display: flex; justify-content: center; margin-bottom: 12px; color: var(--gray); }
 .picks-empty-title { font-size: 16px; font-weight: 700; color: var(--light); margin-bottom: 6px; }
 
 .show-more-btn {
@@ -208,7 +211,7 @@ button { cursor: pointer; font-family: inherit; border: none; background: none; 
 }
 .input-wrap input:focus { border-color: var(--primary); }
 .input-wrap input::placeholder { color: var(--gray); }
-.input-icon { position: absolute; right: 14px; top: 50%; transform: translateY(-50%); font-size: 18px; pointer-events: none; }
+.input-icon { position: absolute; right: 14px; top: 50%; transform: translateY(-50%); display: flex; align-items: center; color: var(--gray); pointer-events: none; }
 
 .btn-primary {
   width: 100%; padding: 16px;
@@ -236,6 +239,7 @@ button { cursor: pointer; font-family: inherit; border: none; background: none; 
 }
 .profile-chips { display: flex; flex-wrap: wrap; gap: 8px; }
 .profile-chip {
+  display: inline-flex; align-items: center; gap: 5px;
   padding: 6px 14px; border-radius: 100px;
   font-size: 13px; font-weight: 600;
   background: var(--surface2); color: var(--muted);
@@ -287,8 +291,8 @@ button { cursor: pointer; font-family: inherit; border: none; background: none; 
 .history-item-top { display: flex; }
 .history-cover {
   width: 80px; height: 80px; object-fit: cover;
-  background: var(--surface2); flex-shrink: 0;
-  display: flex; align-items: center; justify-content: center; font-size: 28px;
+  background: var(--surface2); flex-shrink: 0; color: var(--muted);
+  display: flex; align-items: center; justify-content: center;
 }
 .history-body { flex: 1; padding: 10px 14px; min-width: 0; display: flex; flex-direction: column; justify-content: center; }
 .history-title-text { font-size: 14px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

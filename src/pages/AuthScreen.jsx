@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useAuth } from '../context/AuthContext'
+import { Mail, Lock } from 'lucide-react'
 
 export default function AuthScreen() {
   const { login, register } = useAuth()
@@ -115,7 +116,7 @@ export default function AuthScreen() {
                   autoComplete="email"
                   autoFocus
                 />
-                <span className="input-icon">✉️</span>
+                <span className="input-icon"><Mail size={15} strokeWidth={1.75} /></span>
               </div>
 
               <div className="input-wrap">
@@ -126,7 +127,7 @@ export default function AuthScreen() {
                   onChange={e => setPassword(e.target.value)}
                   autoComplete={tab === 'login' ? 'current-password' : 'new-password'}
                 />
-                <span className="input-icon">🔒</span>
+                <span className="input-icon"><Lock size={15} strokeWidth={1.75} /></span>
               </div>
 
               {tab === 'signup' && (

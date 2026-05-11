@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Music2, Flame, TrendingUp, Trophy, FileText, SlidersHorizontal, Check, X, ChevronDown, ChevronUp } from 'lucide-react'
 
 export default function PickCard({ pick, rank, onAction }) {
   const [expanded, setExpanded] = useState(false)
@@ -17,7 +18,9 @@ export default function PickCard({ pick, rank, onAction }) {
         {pick.cover ? (
           <img className="pick-cover" src={pick.cover} alt={pick.title} />
         ) : (
-          <div className="pick-cover-placeholder">🎵</div>
+          <div className="pick-cover-placeholder">
+            <Music2 size={28} strokeWidth={1.5} />
+          </div>
         )}
         <span className="pick-rank">#{rank}</span>
       </div>
@@ -33,33 +36,35 @@ export default function PickCard({ pick, rank, onAction }) {
 
         <div className="pick-signals">
           {pick.peerCount >= 2 && (
-            <span className="signal-chip hot">🔥 {pick.peerCount} peers</span>
+            <span className="signal-chip hot"><Flame size={12} strokeWidth={2} /> {pick.peerCount} peers</span>
           )}
           {pick.viewsPerHour && (
-            <span className="signal-chip green">📈 {fmtK(pick.viewsPerHour)}/hr</span>
+            <span className="signal-chip green"><TrendingUp size={12} strokeWidth={2} /> {fmtK(pick.viewsPerHour)}/hr</span>
           )}
           {pick.chartRank && (
-            <span className="signal-chip gold">🏆 Chart #{pick.chartRank}</span>
+            <span className="signal-chip gold"><Trophy size={12} strokeWidth={2} /> Chart #{pick.chartRank}</span>
           )}
           {pick.lyricsAvailable && (
-            <span className="signal-chip blue">📝 Lyrics ready</span>
+            <span className="signal-chip blue"><FileText size={12} strokeWidth={2} /> Lyrics ready</span>
           )}
           {pick.variant && pick.variant !== 'original' && (
-            <span className="signal-chip">🎚 {pick.variant}</span>
+            <span className="signal-chip"><SlidersHorizontal size={12} strokeWidth={2} /> {pick.variant}</span>
           )}
         </div>
 
         <div className="pick-actions">
-          <button className="btn-post" onClick={() => handleAction('posted')}>✓ Post it</button>
-          <button className="btn-skip" onClick={() => handleAction('skipped')}>→ Skip</button>
-          <button className="btn-dismiss" onClick={() => handleAction('dismissed')}>✕ Nope</button>
+          <button className="btn-post" onClick={() => handleAction('posted')}><Check size={14} strokeWidth={2.5} /> Post it</button>
+          <button className="btn-skip" onClick={() => handleAction('skipped')}>Skip</button>
+          <button className="btn-dismiss" onClick={() => handleAction('dismissed')}><X size={14} strokeWidth={2.5} /> Nope</button>
         </div>
       </div>
 
       {pick.sources?.length > 0 && (
         <>
           <button className="pick-expand-btn" onClick={() => setExpanded(e => !e)}>
-            {expanded ? '▲ Hide sources' : `▾ See ${pick.sources.length} peer source${pick.sources.length > 1 ? 's' : ''}`}
+            {expanded
+              ? <><ChevronUp size={14} /> Hide sources</>
+              : <><ChevronDown size={14} /> See {pick.sources.length} peer source{pick.sources.length > 1 ? 's' : ''}</>}
           </button>
           {expanded && (
             <div className="pick-sources">

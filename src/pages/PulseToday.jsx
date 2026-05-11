@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import PickCard from '../components/PickCard'
 import { pulse } from '../api'
+import { Search } from 'lucide-react'
 
 const MOCK_PICKS = [
   {
@@ -96,7 +97,7 @@ export default function PulseToday() {
         </div>
       ) : mainPicks.length === 0 ? (
         <div className="picks-empty">
-          <div className="picks-empty-icon">🔍</div>
+          <div className="picks-empty-icon"><Search size={40} strokeWidth={1.25} /></div>
           <div className="picks-empty-title">Nothing cleared the bar today</div>
           <p className="text-muted">We'd rather show you 0 great picks than 5 mediocre ones. Check back tomorrow.</p>
         </div>

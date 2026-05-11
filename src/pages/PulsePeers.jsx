@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { pulse } from '../api'
+import { Tv, X } from 'lucide-react'
 
 const MOCK_PEERS = [
   { channelId: 'UC001', name: 'SoundWave Lyrics', subs: '2.3M', similarity: 0.94, source: 'ai' },
@@ -82,7 +83,7 @@ export default function PulsePeers() {
                   onKeyDown={e => e.key === 'Enter' && handleAdd()}
                   autoFocus
                 />
-                <span className="input-icon">📺</span>
+                <span className="input-icon"><Tv size={15} strokeWidth={1.75} /></span>
               </div>
               <div style={{ display: 'flex', gap: 8 }}>
                 <button
@@ -132,7 +133,7 @@ function PeerRow({ peer, onRemove }) {
           {peer.similarity != null && ` · ${Math.round(peer.similarity * 100)}% match`}
         </div>
       </div>
-      <button className="peer-remove-btn" onClick={() => onRemove(peer.channelId)} title="Remove">✕</button>
+      <button className="peer-remove-btn" onClick={() => onRemove(peer.channelId)} title="Remove"><X size={14} strokeWidth={2} /></button>
     </div>
   )
 }

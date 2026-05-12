@@ -39,7 +39,7 @@ export function AuthProvider({ children }) {
     const token = data.token
     if (!token) throw new Error('No token in response.')
     storage.set('pulse_token', token, { persist: rememberMe })
-    setUser(data.user ?? { email })
+    setUser(data.user ?? { email, emailVerified: true })
   }
 
   // register no longer returns a token — server sends verification email instead

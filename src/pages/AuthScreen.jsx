@@ -1,7 +1,7 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { auth } from '../api'
-import { Mail, Lock, Eye, EyeOff } from 'lucide-react'
+import { Mail, Lock, Eye, EyeOff, AtSign } from 'lucide-react'
 
 export default function AuthScreen() {
   const { login, register } = useAuth()
@@ -20,11 +20,33 @@ export default function AuthScreen() {
   const [showConfirm, setShowConfirm] = useState(false)
   const [rememberMe, setRememberMe] = useState(false)
 
+  const [username, setUsername] = useState('')
+  const [usernameStatus, setUsernameStatus] = useState(null) // null | 'checking' | 'available' | 'taken' | 'invalid'
+  const debounceRef = useRef(null)
+
   const [showForgot, setShowForgot] = useState(false)
   const [forgotEmail, setForgotEmail] = useState('')
   const [forgotLoading, setForgotLoading] = useState(false)
   const [forgotError, setForgotError] = useState(null)
   const [forgotSent, setForgotSent] = useState(false)
+
+  const USERNAME_RE = /^[a-zA-Z0-9_]{3,20}$/
+
+  useEffect(() => {
+    if (tab !== 'signup' || !username) { setUsernameStatus(null); return }
+    if (!USERNAME_RE.test(username)) { setUsernameStatus('invalid'); return }
+    setUsernameStatus('checking')
+    clearTimeout(debounceRef.current)
+    debounceRef.current = setTimeout(async () => {
+      try {
+        const data = await auth.checkUsername(username)
+        setUsernameStatus(data.available ? 'available' : 'taken')
+      } catch {
+        setUsernameStatus(null)
+      }
+    }, 300)
+    return () => clearTimeout(debounceRef.current)
+  }, [username, tab])
 
   function switchTab(t) {
     setTab(t)
@@ -38,6 +60,8 @@ export default function AuthScreen() {
     setShowForgot(false)
     setForgotSent(false)
     setForgotError(null)
+    setUsername('')
+    setUsernameStatus(null)
   }
 
   function openForgot() {
@@ -71,6 +95,10 @@ export default function AuthScreen() {
     setConflictEmail(false)
 
     if (tab === 'signup') {
+      if (!username) return setError('Please choose a username.')
+      if (usernameStatus === 'invalid') return setError('Username must be 3–20 chars, letters, numbers, underscores only.')
+      if (usernameStatus === 'taken') return setError('That username is already taken.')
+      if (usernameStatus !== 'available') return setError('Please wait for username check to complete.')
       if (password.length < 8) return setError('Password must be at least 8 characters.')
       if (password !== confirm) return setError('Passwords do not match.')
       if (!acceptedTerms) return setError('Please accept the Terms of Service to continue.')
@@ -81,7 +109,7 @@ export default function AuthScreen() {
       if (tab === 'login') {
         await login(email, password, rememberMe)
       } else {
-        await register(email, password, emailOptIn)
+        await register(email, password, emailOptIn, username)
       }
     } catch (err) {
       if (tab === 'signup' && err.status === 409) {
@@ -257,6 +285,31 @@ export default function AuthScreen() {
 
                 {tab === 'signup' && (
                   <>
+                    <div className="input-wrap">
+                      <input
+                        type="text"
+                        name="username"
+                        placeholder="Username"
+                        value={username}
+                        onChange={e => setUsername(e.target.value.replace(/\s/g, ''))}
+                        autoComplete="username"
+                        maxLength={20}
+                      />
+                      <span className="input-icon"><AtSign size={15} strokeWidth={1.75} /></span>
+                    </div>
+                    {username.length > 0 && (
+                      <div style={{ fontSize: 11, marginTop: -10, marginBottom: 12, paddingLeft: 2, color:
+                        usernameStatus === 'available' ? 'var(--secondary)' :
+                        usernameStatus === 'taken' ? '#ff7070' :
+                        usernameStatus === 'invalid' ? '#ff7070' : 'var(--muted)'
+                      }}>
+                        {usernameStatus === 'checking' && 'Checking…'}
+                        {usernameStatus === 'available' && '✓ Available'}
+                        {usernameStatus === 'taken' && '✗ Username already taken'}
+                        {usernameStatus === 'invalid' && '✗ 3–20 chars, letters, numbers, underscores only'}
+                      </div>
+                    )}
+
                     <div className="input-wrap">
                       <input
                         type={showConfirm ? 'text' : 'password'}

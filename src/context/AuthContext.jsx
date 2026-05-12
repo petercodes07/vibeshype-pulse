@@ -28,8 +28,8 @@ export function AuthProvider({ children }) {
     return data
   }
 
-  async function register(email, password, emailOptIn) {
-    const data = await auth.register(email, password, emailOptIn)
+  async function register(email, password, emailOptIn, username) {
+    const data = await auth.register(email, password, emailOptIn, username)
     const token = data.token
     if (!token) throw new Error('No token returned from server.')
     storage.set('pulse_token', token)

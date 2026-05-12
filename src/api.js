@@ -43,10 +43,11 @@ export const auth = {
   me:             ()                                    => req('/api/auth/me'),
   updateMe:       (fields)                              => req('/api/auth/me',                { method: 'PATCH', body: JSON.stringify(fields) }),
   login:          (email, password, rememberMe = false)  => req('/api/auth/login',             { method: 'POST',  body: JSON.stringify({ email, password, rememberMe }) }),
-  register:       (email, password, emailOptIn = false) => req('/api/auth/register',          { method: 'POST',  body: JSON.stringify({ email, password, acceptedTerms: true, emailOptIn }) }),
+  register:       (email, password, emailOptIn = false, username) => req('/api/auth/register', { method: 'POST',  body: JSON.stringify({ email, password, acceptedTerms: true, emailOptIn, username }) }),
   logout:         ()                                    => req('/api/auth/logout',            { method: 'POST' }),
-  forgotPassword: (email)                               => req('/api/auth/forgot-password',   { method: 'POST',  body: JSON.stringify({ email }) }),
-  resetPassword:  (token, password)                     => req('/api/auth/reset-password',    { method: 'POST',  body: JSON.stringify({ token, password }) }),
+  forgotPassword:  (email)                               => req('/api/auth/forgot-password',   { method: 'POST',  body: JSON.stringify({ email }) }),
+  resetPassword:   (token, password)                    => req('/api/auth/reset-password',    { method: 'POST',  body: JSON.stringify({ token, password }) }),
+  checkUsername:   (username)                           => req(`/api/auth/check-username?username=${encodeURIComponent(username)}`),
 }
 
 export const pulse = {

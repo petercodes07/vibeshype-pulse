@@ -263,7 +263,7 @@ export default function AuthScreen() {
                 </div>
 
                 {tab === 'login' && (
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, marginTop: -8 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, marginTop: -8 }}>
                     <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
                       <input
                         type="checkbox"
@@ -300,8 +300,7 @@ export default function AuthScreen() {
                     {username.length > 0 && (
                       <div style={{ fontSize: 11, marginTop: -10, marginBottom: 12, paddingLeft: 2, color:
                         usernameStatus === 'available' ? 'var(--secondary)' :
-                        usernameStatus === 'taken' ? '#ff7070' :
-                        usernameStatus === 'invalid' ? '#ff7070' : 'var(--muted)'
+                        usernameStatus === 'taken' || usernameStatus === 'invalid' ? '#ff7070' : 'var(--muted)'
                       }}>
                         {usernameStatus === 'checking' && 'Checking…'}
                         {usernameStatus === 'available' && '✓ Available'}

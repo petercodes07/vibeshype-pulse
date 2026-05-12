@@ -7,6 +7,7 @@ import PulseToday from './pages/PulseToday'
 import PulsePeers from './pages/PulsePeers'
 import PulseHistory from './pages/PulseHistory'
 import ResetPassword from './pages/ResetPassword'
+import VerifyEmail from './pages/VerifyEmail'
 import BottomNav from './components/BottomNav'
 
 function Router() {
@@ -27,7 +28,19 @@ function Router() {
       <div className="app">
         <Routes>
           <Route path="/reset-password" element={<ResetPassword />} />
+          <Route path="/verify-email"   element={<VerifyEmail />} />
           <Route path="*" element={<AuthScreen />} />
+        </Routes>
+      </div>
+    )
+  }
+
+  if (!user.emailVerified) {
+    return (
+      <div className="app">
+        <Routes>
+          <Route path="/verify-email" element={<VerifyEmail />} />
+          <Route path="*" element={<Navigate to="/verify-email" replace />} />
         </Routes>
       </div>
     )

@@ -7,10 +7,10 @@ function createWindow() {
   nativeTheme.themeSource = 'dark'
 
   const win = new BrowserWindow({
-    width: 420,
-    height: 820,
-    minWidth: 375,
-    minHeight: 700,
+    width: 1200,
+    height: 780,
+    minWidth: 900,
+    minHeight: 600,
     backgroundColor: '#121212',
     titleBarStyle: 'hiddenInset',
     vibrancy: 'under-window',

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useAuth } from '../context/AuthContext'
-import { Mail, Lock } from 'lucide-react'
+import { Mail, Lock, Eye, EyeOff } from 'lucide-react'
 import { auth } from '../api'
 
 export default function AuthScreen() {
@@ -20,6 +20,8 @@ export default function AuthScreen() {
   const [forgotSent, setForgotSent] = useState(false)
   const [forgotError, setForgotError] = useState(null)
   const [forgotLoading, setForgotLoading] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
+  const [showConfirm, setShowConfirm] = useState(false)
 
   function switchTab(t) {
     setTab(t)
@@ -199,14 +201,16 @@ export default function AuthScreen() {
 
               <div className="input-wrap">
                 <input
-                  type="password"
+                  type={showPassword ? 'text' : 'password'}
                   name="password"
                   placeholder="Password"
                   value={password}
                   onChange={e => setPassword(e.target.value)}
                   autoComplete={tab === 'login' ? 'current-password' : 'new-password'}
                 />
-                <span className="input-icon"><Lock size={15} strokeWidth={1.75} /></span>
+                <span className="input-icon" onClick={() => setShowPassword(v => !v)} style={{ cursor: 'pointer' }}>
+                  {showPassword ? <EyeOff size={15} strokeWidth={1.75} /> : <Eye size={15} strokeWidth={1.75} />}
+                </span>
               </div>
 
               {tab === 'login' && (
@@ -225,17 +229,15 @@ export default function AuthScreen() {
                 <>
                   <div className="input-wrap">
                     <input
-                      type="password"
+                      type={showConfirm ? 'text' : 'password'}
                       name="confirm-password"
                       placeholder="Confirm password"
                       value={confirm}
                       onChange={e => setConfirm(e.target.value)}
                       autoComplete="new-password"
                     />
-                    <span className="input-icon">
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/>
-                      </svg>
+                    <span className="input-icon" onClick={() => setShowConfirm(v => !v)} style={{ cursor: 'pointer' }}>
+                      {showConfirm ? <EyeOff size={15} strokeWidth={1.75} /> : <Eye size={15} strokeWidth={1.75} />}
                     </span>
                   </div>
 

@@ -1,10 +1,12 @@
 import { useState, useEffect, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { auth } from '../api'
 import { Mail, Lock, Eye, EyeOff, AtSign } from 'lucide-react'
 
 export default function AuthScreen() {
   const { login, register } = useAuth()
+  const navigate = useNavigate()
   const [tab, setTab] = useState('login')
 
   const [email, setEmail] = useState('')
@@ -110,9 +112,12 @@ export default function AuthScreen() {
         await login(email, password, rememberMe)
       } else {
         await register(email, password, emailOptIn, username)
+        navigate(`/verify-email?email=${encodeURIComponent(email)}`)
       }
     } catch (err) {
-      if (tab === 'signup' && err.status === 409) {
+      if (tab === 'login' && err.status === 403 && err.body?.verificationRequired) {
+        navigate(`/verify-email?email=${encodeURIComponent(email)}`)
+      } else if (tab === 'signup' && err.status === 409) {
         setConflictEmail(true)
       } else if (err.name === 'AbortError' || !err.status) {
         setError('Could not reach the server. Check your connection.')

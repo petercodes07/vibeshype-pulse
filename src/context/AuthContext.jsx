@@ -28,13 +28,10 @@ export function AuthProvider({ children }) {
     return data
   }
 
+  // register no longer returns a token — server sends verification email instead
   async function register(email, password, emailOptIn, username) {
-    const data = await auth.register(email, password, emailOptIn, username)
-    const token = data.token
-    if (!token) throw new Error('No token returned from server.')
-    storage.set('pulse_token', token)
-    setUser(data.user ?? { email })
-    return data
+    await auth.register(email, password, emailOptIn, username)
+    // caller is responsible for navigating to /verify-email
   }
 
   async function logout() {

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { pulse } from '../api'
 import { storage } from '../storage'
@@ -98,9 +98,33 @@ export default function PulseOnboard() {
     navigate('/pulse/today')
   }
 
+  const swipeStartX = useRef(null)
+
+  function handleTouchStart(e) {
+    swipeStartX.current = e.touches[0].clientX
+  }
+
+  function handleTouchEnd(e) {
+    if (swipeStartX.current === null) return
+    const delta = e.changedTouches[0].clientX - swipeStartX.current
+    swipeStartX.current = null
+    if (Math.abs(delta) < 50) return
+
+    if (delta < 0) {
+      // swipe left → forward
+      if (step === 0 && profile) setStep(1)
+      else if (step === 1) setStep(2)
+      else if (step === 2 && !loading) handlePeersConfirm()
+    } else {
+      // swipe right → back
+      if (step === 1) setStep(0)
+      else if (step === 2) setStep(1)
+    }
+  }
+
   return (
     <div className="screen-bare">
-      <div className="onboard-screen">
+      <div className="onboard-screen" onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
         <div className="onboard-logo">Vibe<span>Shype</span> Pulse</div>
 
         <div className="step-dots">

@@ -50,8 +50,6 @@ export const auth = {
   resetPassword:       (token, password)                               => req('/api/auth/reset-password',     { method: 'POST',  body: JSON.stringify({ token, password }) }),
   checkUsername:       (username)                                      => req(`/api/auth/check-username?username=${encodeURIComponent(username)}`),
   verifyLogin:         (email, code)                                    => req('/api/auth/verify-login',       { method: 'POST',  body: JSON.stringify({ email, code }) }),
-  resendVerification:  (email)                                         => req('/api/auth/resend-verification', { method: 'POST',  body: JSON.stringify({ email }) }),
-  verifyEmailCode:     (email, code)                                    => req('/api/auth/verify-email-code',   { method: 'POST',  body: JSON.stringify({ email, code }) }),
 }
 
 export const pulse = {

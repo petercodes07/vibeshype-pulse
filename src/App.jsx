@@ -6,6 +6,7 @@ import PulseOnboard from './pages/PulseOnboard'
 import PulseToday from './pages/PulseToday'
 import PulsePeers from './pages/PulsePeers'
 import PulseHistory from './pages/PulseHistory'
+import Profile from './pages/Profile'
 import ResetPassword from './pages/ResetPassword'
 import VerifyEmail from './pages/VerifyEmail'
 import BottomNav from './components/BottomNav'
@@ -56,6 +57,7 @@ function Router() {
         <Route path="/pulse/today"   element={onboarded ? <PulseToday />   : <Navigate to="/pulse/onboard" replace />} />
         <Route path="/pulse/peers"   element={onboarded ? <PulsePeers />   : <Navigate to="/pulse/onboard" replace />} />
         <Route path="/pulse/history" element={onboarded ? <PulseHistory /> : <Navigate to="/pulse/onboard" replace />} />
+        <Route path="/pulse/profile" element={onboarded ? <Profile />     : <Navigate to="/pulse/onboard" replace />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
       {onboarded && <BottomNav />}

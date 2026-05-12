@@ -110,6 +110,7 @@ export default function AuthScreen() {
               <div className="input-wrap">
                 <input
                   type="email"
+                  name="email"
                   placeholder="Email"
                   value={email}
                   onChange={e => setEmail(e.target.value)}
@@ -122,6 +123,7 @@ export default function AuthScreen() {
               <div className="input-wrap">
                 <input
                   type="password"
+                  name="password"
                   placeholder="Password"
                   value={password}
                   onChange={e => setPassword(e.target.value)}
@@ -135,6 +137,7 @@ export default function AuthScreen() {
                   <div className="input-wrap">
                     <input
                       type="password"
+                      name="confirm-password"
                       placeholder="Confirm password"
                       value={confirm}
                       onChange={e => setConfirm(e.target.value)}

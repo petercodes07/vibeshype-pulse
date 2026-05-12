@@ -1,8 +1,20 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { pulse } from '../api'
 import { storage } from '../storage'
-import { Tv, Film, Target, Check } from 'lucide-react'
+import { Tv, Film, Target, Check, Plus } from 'lucide-react'
+
+const DRAFT_KEY = 'pulse_onboard_draft'
+
+function loadDraft() {
+  try { return JSON.parse(localStorage.getItem(DRAFT_KEY) || 'null') } catch { return null }
+}
+function saveDraft(data) {
+  localStorage.setItem(DRAFT_KEY, JSON.stringify(data))
+}
+function clearDraft() {
+  localStorage.removeItem(DRAFT_KEY)
+}
 
 const STEPS = ['Channel', 'Profile', 'Peers', 'Done']
 
@@ -27,12 +39,17 @@ const MOCK_PEERS = [
 
 export default function PulseOnboard() {
   const navigate = useNavigate()
-  const [step, setStep] = useState(0)
-  const [channelUrl, setChannelUrl] = useState('')
+  const draft = loadDraft()
+  const [step, setStep] = useState(draft?.step ?? 0)
+  const [channelUrl, setChannelUrl] = useState(draft?.channelUrl ?? '')
   const [loading, setLoading] = useState(false)
-  const [profile, setProfile] = useState(null)
-  const [peers, setPeers] = useState([])
-  const [selectedPeers, setSelectedPeers] = useState(new Set())
+  const [profile, setProfile] = useState(draft?.profile ?? null)
+  const [peers, setPeers] = useState(draft?.peers ?? [])
+  const [selectedPeers, setSelectedPeers] = useState(new Set(draft?.selectedPeers ?? []))
+
+  useEffect(() => {
+    saveDraft({ step, channelUrl, profile, peers, selectedPeers: [...selectedPeers] })
+  }, [step, channelUrl, profile, peers, selectedPeers])
 
   async function handleChannelSubmit() {
     if (!channelUrl.trim()) return
@@ -69,8 +86,19 @@ export default function PulseOnboard() {
     })
   }
 
+  function addCustomPeer(url) {
+    const id = `custom_${url}`
+    const name = url.replace(/^https?:\/\/(www\.)?youtube\.com\/@?/, '').replace(/^@/, '') || url
+    setPeers(prev => {
+      if (prev.some(p => p.channelId === id)) return prev
+      return [...prev, { channelId: id, name, subs: 'competitor', avatar: null }]
+    })
+    setSelectedPeers(prev => new Set([...prev, id]))
+  }
+
   function finish() {
     storage.set('pulse_onboarded', 'true')
+    clearDraft()
     navigate('/pulse/today')
   }
 
@@ -101,6 +129,7 @@ export default function PulseOnboard() {
             peers={peers}
             selected={selectedPeers}
             onToggle={togglePeer}
+            onAddCustom={addCustomPeer}
             onConfirm={handlePeersConfirm}
             loading={loading}
           />
@@ -190,7 +219,16 @@ function StepProfile({ profile, onNext }) {
   )
 }
 
-function StepPeers({ peers, selected, onToggle, onConfirm, loading }) {
+function StepPeers({ peers, selected, onToggle, onAddCustom, onConfirm, loading }) {
+  const [customUrl, setCustomUrl] = useState('')
+
+  function handleAdd() {
+    const val = customUrl.trim()
+    if (!val) return
+    onAddCustom(val)
+    setCustomUrl('')
+  }
+
   return (
     <>
       <div className="onboard-heading">Choose your peer set</div>
@@ -219,6 +257,22 @@ function StepPeers({ peers, selected, onToggle, onConfirm, loading }) {
             </div>
           </div>
         ))}
+      </div>
+
+      <div className="peer-add-row">
+        <div className="input-wrap" style={{ flex: 1, marginBottom: 0 }}>
+          <input
+            type="url"
+            placeholder="Add a competitor (channel URL or @handle)"
+            value={customUrl}
+            onChange={e => setCustomUrl(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && handleAdd()}
+          />
+          <span className="input-icon"><Tv size={15} strokeWidth={1.75} /></span>
+        </div>
+        <button className="btn-icon" onClick={handleAdd} disabled={!customUrl.trim()}>
+          <Plus size={18} strokeWidth={2} />
+        </button>
       </div>
 
       <button

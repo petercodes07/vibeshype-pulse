@@ -279,6 +279,9 @@ button { cursor: pointer; font-family: inherit; border: none; background: none; 
 .peer-item.selected .peer-check { background: var(--secondary); border-color: var(--secondary); color: #fff; }
 
 .peer-count-note { font-size: 13px; color: var(--gray); text-align: center; margin-bottom: 12px; }
+.peer-add-row { display: flex; gap: 8px; align-items: center; margin-bottom: 16px; }
+.btn-icon { flex-shrink: 0; width: 40px; height: 40px; border-radius: var(--radius-sm); background: var(--secondary); color: #fff; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+.btn-icon:disabled { opacity: 0.4; cursor: not-allowed; }
 
 /* ── History ── */
 .stat-row { display: grid; grid-template-columns: repeat(3,1fr); gap: 10px; margin: 0 16px 20px; }

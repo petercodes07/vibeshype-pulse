@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { Lock } from 'lucide-react'
 import { auth } from '../api'
+import { Lock } from 'lucide-react'
 
 export default function ResetPassword() {
   const [searchParams] = useSearchParams()
@@ -24,11 +24,7 @@ export default function ResetPassword() {
               Invalid or missing reset link. Please request a new one.
             </p>
           </div>
-          <button
-            type="button"
-            className="btn-primary"
-            onClick={() => navigate('/')}
-          >
+          <button type="button" className="btn-primary" onClick={() => navigate('/')}>
             Back to login
           </button>
         </div>
@@ -39,19 +35,19 @@ export default function ResetPassword() {
   async function handleSubmit(e) {
     e.preventDefault()
     setError(null)
-
     if (password.length < 8) return setError('Password must be at least 8 characters.')
     if (password !== confirm) return setError('Passwords do not match.')
-
     setLoading(true)
     try {
       await auth.resetPassword(token, password)
       setDone(true)
     } catch (err) {
-      if (err.status === 400 || err.status === 404) {
+      if (err.name === 'AbortError' || !err.status) {
+        setError('Could not reach the server. Check your connection.')
+      } else if (err.status === 400 || err.status === 404) {
         setError('This reset link is invalid or has expired.')
       } else {
-        setError('Could not reset password. Check your connection.')
+        setError('Something went wrong. Please try again.')
       }
     } finally {
       setLoading(false)
@@ -75,11 +71,7 @@ export default function ResetPassword() {
                 <p style={{ color: 'var(--muted)', fontSize: 14, marginBottom: 20 }}>
                   Your password has been updated. You can now log in.
                 </p>
-                <button
-                  type="button"
-                  className="btn-primary"
-                  onClick={() => navigate('/')}
-                >
+                <button type="button" className="btn-primary" onClick={() => navigate('/')}>
                   Go to login →
                 </button>
               </div>

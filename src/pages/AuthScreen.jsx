@@ -1,7 +1,12 @@
 import { useState } from 'react'
 import { useAuth } from '../context/AuthContext'
+<<<<<<< HEAD
 import { Mail, Lock, Eye, EyeOff } from 'lucide-react'
 import { auth } from '../api'
+=======
+import { auth } from '../api'
+import { Mail, Lock } from 'lucide-react'
+>>>>>>> 2d2c4c4 (Add forgot password flow and /reset-password route)
 
 export default function AuthScreen() {
   const { login, register } = useAuth()
@@ -23,6 +28,12 @@ export default function AuthScreen() {
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirm, setShowConfirm] = useState(false)
 
+  const [showForgot, setShowForgot] = useState(false)
+  const [forgotEmail, setForgotEmail] = useState('')
+  const [forgotLoading, setForgotLoading] = useState(false)
+  const [forgotError, setForgotError] = useState(null)
+  const [forgotSent, setForgotSent] = useState(false)
+
   function switchTab(t) {
     setTab(t)
     setError(null)
@@ -32,6 +43,34 @@ export default function AuthScreen() {
     setConfirm('')
     setAcceptedTerms(false)
     setEmailOptIn(false)
+    setShowForgot(false)
+    setForgotSent(false)
+    setForgotError(null)
+  }
+
+  function openForgot() {
+    setShowForgot(true)
+    setForgotEmail(email)
+    setForgotError(null)
+    setForgotSent(false)
+  }
+
+  async function handleForgot(e) {
+    e.preventDefault()
+    setForgotError(null)
+    setForgotLoading(true)
+    try {
+      await auth.forgotPassword(forgotEmail)
+      setForgotSent(true)
+    } catch (err) {
+      if (err.name === 'AbortError' || !err.status) {
+        setForgotError('Could not reach the server. Check your connection.')
+      } else {
+        setForgotError('Something went wrong. Please try again.')
+      }
+    } finally {
+      setForgotLoading(false)
+    }
   }
 
   async function handleSubmit(e) {
@@ -185,6 +224,67 @@ export default function AuthScreen() {
               ))}
             </div>
 
+            {/* Inline forgot password view */}
+            {showForgot && (
+              <div style={{ marginBottom: 24 }}>
+                <button
+                  type="button"
+                  onClick={() => setShowForgot(false)}
+                  style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--muted)', fontSize: 13, marginBottom: 20 }}
+                >
+                  ← Back to login
+                </button>
+                <div style={{ fontSize: 17, fontWeight: 700, marginBottom: 6 }}>Reset your password</div>
+                <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 20, lineHeight: 1.55 }}>
+                  Enter your email and we'll send you a link to reset your password.
+                </div>
+                {forgotSent ? (
+                  <div style={{
+                    padding: '12px 16px',
+                    background: 'rgba(29,185,84,0.12)',
+                    borderRadius: 'var(--radius-sm)',
+                    color: 'var(--secondary)',
+                    fontSize: 13, lineHeight: 1.5,
+                  }}>
+                    Check your email for a reset link.
+                  </div>
+                ) : (
+                  <form onSubmit={handleForgot}>
+                    <div className="input-wrap">
+                      <input
+                        type="email"
+                        placeholder="Email"
+                        value={forgotEmail}
+                        onChange={e => setForgotEmail(e.target.value)}
+                        autoComplete="email"
+                        autoFocus
+                        required
+                      />
+                      <span className="input-icon"><Mail size={15} strokeWidth={1.75} /></span>
+                    </div>
+                    {forgotError && (
+                      <div style={{
+                        padding: '10px 14px', marginBottom: 14,
+                        background: 'rgba(255,59,59,0.12)',
+                        borderRadius: 'var(--radius-sm)',
+                        color: '#ff7070', fontSize: 13, lineHeight: 1.5,
+                      }}>
+                        {forgotError}
+                      </div>
+                    )}
+                    <button
+                      type="submit"
+                      className="btn-primary"
+                      disabled={!forgotEmail.trim() || forgotLoading}
+                    >
+                      {forgotLoading ? 'Sending…' : 'Send reset link →'}
+                    </button>
+                  </form>
+                )}
+              </div>
+            )}
+
+            {!showForgot && (
             <form onSubmit={handleSubmit}>
               <div className="input-wrap">
                 <input
@@ -214,11 +314,19 @@ export default function AuthScreen() {
               </div>
 
               {tab === 'login' && (
+<<<<<<< HEAD
                 <div style={{ textAlign: 'right', marginBottom: 12, marginTop: -8 }}>
                   <button
                     type="button"
                     onClick={() => { setForgotMode(true); setForgotEmail(email) }}
                     style={{ background: 'none', border: 'none', color: 'var(--muted)', fontSize: 12, cursor: 'pointer' }}
+=======
+                <div style={{ textAlign: 'right', marginTop: -8, marginBottom: 16 }}>
+                  <button
+                    type="button"
+                    onClick={openForgot}
+                    style={{ fontSize: 12, color: 'var(--muted)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+>>>>>>> 2d2c4c4 (Add forgot password flow and /reset-password route)
                   >
                     Forgot password?
                   </button>
@@ -310,6 +418,7 @@ export default function AuthScreen() {
                   : (tab === 'login' ? 'Log in →' : 'Create account →')}
               </button>
             </form>
+            )}
           </div>
         </div>
 

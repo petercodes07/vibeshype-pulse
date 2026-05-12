@@ -6,6 +6,7 @@ import PulseOnboard from './pages/PulseOnboard'
 import PulseToday from './pages/PulseToday'
 import PulsePeers from './pages/PulsePeers'
 import PulseHistory from './pages/PulseHistory'
+import ResetPassword from './pages/ResetPassword'
 import BottomNav from './components/BottomNav'
 
 function Router() {
@@ -24,7 +25,10 @@ function Router() {
   if (!user) {
     return (
       <div className="app">
-        <AuthScreen />
+        <Routes>
+          <Route path="/reset-password" element={<ResetPassword />} />
+          <Route path="*" element={<AuthScreen />} />
+        </Routes>
       </div>
     )
   }

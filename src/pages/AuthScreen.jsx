@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { Mail, Lock } from 'lucide-react'
+import { auth } from '../api'
 
 export default function AuthScreen() {
   const { login, register } = useAuth()
@@ -14,6 +15,11 @@ export default function AuthScreen() {
   const [error, setError] = useState(null)
   const [conflictEmail, setConflictEmail] = useState(false) // 409 state
   const [loading, setLoading] = useState(false)
+  const [forgotMode, setForgotMode] = useState(false)
+  const [forgotEmail, setForgotEmail] = useState('')
+  const [forgotSent, setForgotSent] = useState(false)
+  const [forgotError, setForgotError] = useState(null)
+  const [forgotLoading, setForgotLoading] = useState(false)
 
   function switchTab(t) {
     setTab(t)
@@ -59,6 +65,77 @@ export default function AuthScreen() {
     } finally {
       setLoading(false)
     }
+  }
+
+  async function handleForgotPassword(e) {
+    e.preventDefault()
+    setForgotError(null)
+    setForgotLoading(true)
+    try {
+      await auth.forgotPassword(forgotEmail)
+      setForgotSent(true)
+    } catch {
+      setForgotError('Could not send reset email. Check your connection.')
+    } finally {
+      setForgotLoading(false)
+    }
+  }
+
+  if (forgotMode) {
+    return (
+      <div className="screen-bare">
+        <div className="onboard-screen">
+          <div>
+            <div className="onboard-logo">Vibe<span>Shype</span> Pulse</div>
+            <div style={{ fontSize: 13, color: 'var(--gray)', marginTop: 4 }}>Reset your password</div>
+          </div>
+          <div style={{ flex: 1, display: 'flex', alignItems: 'center' }}>
+            <div style={{ width: '100%' }}>
+              {forgotSent ? (
+                <div style={{ textAlign: 'center', color: 'var(--muted)', fontSize: 14, lineHeight: 1.6 }}>
+                  <p>Check your inbox — if that email is registered, a reset link has been sent.</p>
+                  <button
+                    type="button"
+                    onClick={() => { setForgotMode(false); setForgotSent(false); setForgotEmail('') }}
+                    style={{ marginTop: 16, color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 13 }}
+                  >
+                    ← Back to login
+                  </button>
+                </div>
+              ) : (
+                <form onSubmit={handleForgotPassword}>
+                  <div className="input-wrap">
+                    <input
+                      type="email"
+                      placeholder="Enter your email"
+                      value={forgotEmail}
+                      onChange={e => setForgotEmail(e.target.value)}
+                      autoFocus
+                    />
+                    <span className="input-icon"><Mail size={15} strokeWidth={1.75} /></span>
+                  </div>
+                  {forgotError && (
+                    <div style={{ padding: '10px 14px', marginBottom: 14, background: 'rgba(255,59,59,0.12)', borderRadius: 'var(--radius-sm)', color: '#ff7070', fontSize: 13 }}>
+                      {forgotError}
+                    </div>
+                  )}
+                  <button type="submit" className="btn-primary" disabled={!forgotEmail.trim() || forgotLoading}>
+                    {forgotLoading ? 'Sending…' : 'Send reset link →'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setForgotMode(false)}
+                    style={{ display: 'block', marginTop: 12, color: 'var(--muted)', background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, width: '100%', textAlign: 'center' }}
+                  >
+                    ← Back to login
+                  </button>
+                </form>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -131,6 +208,18 @@ export default function AuthScreen() {
                 />
                 <span className="input-icon"><Lock size={15} strokeWidth={1.75} /></span>
               </div>
+
+              {tab === 'login' && (
+                <div style={{ textAlign: 'right', marginBottom: 12, marginTop: -8 }}>
+                  <button
+                    type="button"
+                    onClick={() => { setForgotMode(true); setForgotEmail(email) }}
+                    style={{ background: 'none', border: 'none', color: 'var(--muted)', fontSize: 12, cursor: 'pointer' }}
+                  >
+                    Forgot password?
+                  </button>
+                </div>
+              )}
 
               {tab === 'signup' && (
                 <>

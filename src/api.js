@@ -5,7 +5,8 @@ const BASE = import.meta.env.VITE_API_URL || ''
 async function req(path, opts = {}) {
   const token = storage.get('pulse_token')
   const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), 4000)
+  const timeoutMs = opts.timeout ?? 4000
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
   const url = `${BASE}${path}`
   const method = opts.method || 'GET'
   console.log(`[api] → ${method} ${url}`)
@@ -47,7 +48,7 @@ export const auth = {
 }
 
 export const pulse = {
-  onboard:  (channelUrl)      => req('/api/pulse/onboard', { method: 'POST', body: JSON.stringify({ channelUrl }) }),
+  onboard:  (channelUrl)      => req('/api/pulse/onboard', { method: 'POST', body: JSON.stringify({ channelUrl }), timeout: 30000 }),
   profile:  ()                => req('/api/pulse/profile'),
   peers:    ()                => req('/api/pulse/peers'),
   savePeers:(channelIds)      => req('/api/pulse/peers', { method: 'PUT', body: JSON.stringify({ channelIds }) }),

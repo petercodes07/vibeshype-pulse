@@ -18,24 +18,6 @@ function clearDraft() {
 
 const STEPS = ['Channel', 'Profile', 'Peers', 'Done']
 
-const MOCK_PROFILE = {
-  channelName: 'LyricsVibes',
-  genres: ['Pop', 'R&B', 'Hip-Hop'],
-  languages: ['English', 'Arabic'],
-  format: 'Lyric video',
-  avgDuration: 210,
-}
-
-const MOCK_PEERS = [
-  { channelId: 'UC001', name: 'SoundWave Lyrics', subs: '2.3M', avatar: null },
-  { channelId: 'UC002', name: 'MusicBox Arabic', subs: '1.8M', avatar: null },
-  { channelId: 'UC003', name: 'TopHitsLyrics', subs: '950K', avatar: null },
-  { channelId: 'UC004', name: 'HitSongLyrics', subs: '780K', avatar: null },
-  { channelId: 'UC005', name: 'ViralLyric', subs: '640K', avatar: null },
-  { channelId: 'UC006', name: 'LyricMaster', subs: '510K', avatar: null },
-  { channelId: 'UC007', name: 'BeatLyrics', subs: '430K', avatar: null },
-  { channelId: 'UC008', name: 'PopLyricHub', subs: '390K', avatar: null },
-]
 
 export default function PulseOnboard() {
   const navigate = useNavigate()
@@ -46,6 +28,7 @@ export default function PulseOnboard() {
   const [profile, setProfile] = useState(draft?.profile ?? null)
   const [peers, setPeers] = useState(draft?.peers ?? [])
   const [selectedPeers, setSelectedPeers] = useState(new Set(draft?.selectedPeers ?? []))
+  const [error, setError] = useState(null)
 
   useEffect(() => {
     saveDraft({ step, channelUrl, profile, peers, selectedPeers: [...selectedPeers] })
@@ -54,28 +37,41 @@ export default function PulseOnboard() {
   async function handleChannelSubmit() {
     if (!channelUrl.trim()) return
     setLoading(true)
+    setError(null)
     try {
       const data = await pulse.onboard(channelUrl)
-      setProfile(data.profile ?? MOCK_PROFILE)
-      setPeers(data.suggestedPeers ?? MOCK_PEERS)
-      setSelectedPeers(new Set((data.suggestedPeers ?? MOCK_PEERS).slice(0, 5).map(p => p.channelId)))
-    } catch {
-      setProfile(MOCK_PROFILE)
-      setPeers(MOCK_PEERS)
-      setSelectedPeers(new Set(MOCK_PEERS.slice(0, 5).map(p => p.channelId)))
+      setProfile(data.profile)
+      setPeers(data.suggestedPeers ?? [])
+      setSelectedPeers(new Set((data.suggestedPeers ?? []).slice(0, 5).map(p => p.channelId)))
+      setStep(1)
+    } catch (err) {
+      if (err.name === 'AbortError') {
+        setError('Analysis timed out. The server took too long — please try again.')
+      } else if (!err.status) {
+        setError('Could not reach the server. Check your connection.')
+      } else {
+        setError('Could not analyse that channel. Check the URL and try again.')
+      }
     } finally {
       setLoading(false)
-      setStep(1)
     }
   }
 
   async function handlePeersConfirm() {
     setLoading(true)
+    setError(null)
     try {
       await pulse.savePeers([...selectedPeers])
-    } catch {}
-    setLoading(false)
-    setStep(3)
+      setStep(3)
+    } catch (err) {
+      setError(
+        !err.status
+          ? 'Could not reach the server. Check your connection.'
+          : 'Could not save your peers. Please try again.'
+      )
+    } finally {
+      setLoading(false)
+    }
   }
 
   function togglePeer(id) {
@@ -119,6 +115,7 @@ export default function PulseOnboard() {
             onChange={setChannelUrl}
             onSubmit={handleChannelSubmit}
             loading={loading}
+            error={error}
           />
         )}
         {step === 1 && profile && (
@@ -132,6 +129,7 @@ export default function PulseOnboard() {
             onAddCustom={addCustomPeer}
             onConfirm={handlePeersConfirm}
             loading={loading}
+            error={error}
           />
         )}
         {step === 3 && (
@@ -142,7 +140,7 @@ export default function PulseOnboard() {
   )
 }
 
-function StepChannel({ url, onChange, onSubmit, loading }) {
+function StepChannel({ url, onChange, onSubmit, loading, error }) {
   return (
     <>
       <div className="onboard-heading">What's your channel?</div>
@@ -160,12 +158,22 @@ function StepChannel({ url, onChange, onSubmit, loading }) {
         />
         <span className="input-icon"><Tv size={15} strokeWidth={1.75} /></span>
       </div>
+      {error && (
+        <div style={{
+          padding: '10px 14px', marginBottom: 4,
+          background: 'rgba(255,59,59,0.12)',
+          borderRadius: 'var(--radius-sm)',
+          color: '#ff7070', fontSize: 13, lineHeight: 1.5,
+        }}>
+          {error}
+        </div>
+      )}
       <button
         className="btn-primary"
         disabled={!url.trim() || loading}
         onClick={onSubmit}
       >
-        {loading ? 'Analysing…' : 'Analyse my channel →'}
+        {loading ? 'Analysing your channel…' : 'Analyse my channel →'}
       </button>
     </>
   )
@@ -219,7 +227,7 @@ function StepProfile({ profile, onNext }) {
   )
 }
 
-function StepPeers({ peers, selected, onToggle, onAddCustom, onConfirm, loading }) {
+function StepPeers({ peers, selected, onToggle, onAddCustom, onConfirm, loading, error }) {
   const [customUrl, setCustomUrl] = useState('')
 
   function handleAdd() {
@@ -252,6 +260,16 @@ function StepPeers({ peers, selected, onToggle, onAddCustom, onConfirm, loading 
         </button>
       </div>
 
+      {error && (
+        <div style={{
+          padding: '10px 14px', marginBottom: 4,
+          background: 'rgba(255,59,59,0.12)',
+          borderRadius: 'var(--radius-sm)',
+          color: '#ff7070', fontSize: 13, lineHeight: 1.5,
+        }}>
+          {error}
+        </div>
+      )}
       <button
         className="btn-primary"
         disabled={selected.size === 0 || loading}

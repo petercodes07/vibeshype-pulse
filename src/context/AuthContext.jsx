@@ -19,19 +19,32 @@ export function AuthProvider({ children }) {
       })
   }, [])
 
+  // Step 1 — returns { challengeRequired: true, email } on 202; caller shows code input
   async function login(email, password, rememberMe = false) {
     const data = await auth.login(email, password, rememberMe)
+    if (data.challengeRequired) return data
+    // Fallback: if server ever returns a token directly
+    _storeSession(data, email, rememberMe)
+    return data
+  }
+
+  // Step 2 — called from inline code input OR VerifyLogin page
+  async function completeLogin(email, code, rememberMe = false) {
+    const data = await auth.verifyLogin(email, code)
+    _storeSession(data, email, rememberMe)
+    return data
+  }
+
+  function _storeSession(data, email, rememberMe) {
     const token = data.token
-    if (!token) throw new Error('No token returned from server.')
+    if (!token) throw new Error('No token in response.')
     storage.set('pulse_token', token, { persist: rememberMe })
     setUser(data.user ?? { email })
-    return data
   }
 
   // register no longer returns a token — server sends verification email instead
   async function register(email, password, emailOptIn, username) {
     await auth.register(email, password, emailOptIn, username)
-    // caller is responsible for navigating to /verify-email
   }
 
   async function logout() {
@@ -42,7 +55,7 @@ export function AuthProvider({ children }) {
   }
 
   return (
-    <Ctx.Provider value={{ user, login, register, logout, loading: user === undefined }}>
+    <Ctx.Provider value={{ user, login, completeLogin, register, logout, loading: user === undefined }}>
       {children}
     </Ctx.Provider>
   )

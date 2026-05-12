@@ -5,9 +5,14 @@ import { auth } from '../api'
 import { Mail, Lock, Eye, EyeOff, AtSign } from 'lucide-react'
 
 export default function AuthScreen() {
-  const { login, register } = useAuth()
+  const { login, completeLogin, register } = useAuth()
   const navigate = useNavigate()
   const [tab, setTab] = useState('login')
+
+  const [challengeEmail, setChallengeEmail] = useState(null)
+  const [code, setCode] = useState('')
+  const [codeError, setCodeError] = useState(null)
+  const [codeLoading, setCodeLoading] = useState(false)
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -109,7 +114,10 @@ export default function AuthScreen() {
     setLoading(true)
     try {
       if (tab === 'login') {
-        await login(email, password, rememberMe)
+        const data = await login(email, password, rememberMe)
+        if (data.challengeRequired) {
+          setChallengeEmail(data.email ?? email)
+        }
       } else {
         await register(email, password, emailOptIn, username)
         navigate(`/verify-email?email=${encodeURIComponent(email)}`)
@@ -131,6 +139,100 @@ export default function AuthScreen() {
     } finally {
       setLoading(false)
     }
+  }
+
+  async function handleCode(e) {
+    e.preventDefault()
+    setCodeError(null)
+    setCodeLoading(true)
+    try {
+      await completeLogin(challengeEmail, code.trim(), rememberMe)
+    } catch (err) {
+      if (err.status === 401) {
+        setCodeError('Incorrect code. Check your email and try again.')
+      } else if (err.status === 429) {
+        setCodeError('Too many attempts. Request a new login link.')
+      } else if (err.status === 400) {
+        setCodeError('Code expired or invalid. Go back and log in again.')
+      } else if (err.name === 'AbortError' || !err.status) {
+        setCodeError('Could not reach the server. Check your connection.')
+      } else {
+        setCodeError('Something went wrong. Please try again.')
+      }
+    } finally {
+      setCodeLoading(false)
+    }
+  }
+
+  if (challengeEmail) {
+    return (
+      <div className="screen-bare">
+        <div className="onboard-screen">
+          <div>
+            <div className="onboard-logo">Vibe<span>Shype</span> Pulse</div>
+            <div style={{ fontSize: 13, color: 'var(--gray)', marginTop: 4 }}>
+              Know what to post next. Every day.
+            </div>
+          </div>
+
+          <div style={{ flex: 1, display: 'flex', alignItems: 'center' }}>
+            <div style={{ width: '100%' }}>
+              <div style={{ fontSize: 20, fontWeight: 800, marginBottom: 8, letterSpacing: '-0.4px' }}>
+                Check your email
+              </div>
+              <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 28, lineHeight: 1.65 }}>
+                We sent a 6-digit code to{' '}
+                <span style={{ color: 'var(--light)', fontWeight: 600 }}>{challengeEmail}</span>.
+                {' '}Enter it below or click the link in the email.
+              </div>
+
+              <form onSubmit={handleCode}>
+                <div className="input-wrap">
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    placeholder="000000"
+                    maxLength={6}
+                    value={code}
+                    onChange={e => setCode(e.target.value.replace(/\D/g, ''))}
+                    autoFocus
+                    style={{ letterSpacing: '0.3em', fontSize: 22, textAlign: 'center' }}
+                  />
+                </div>
+
+                {codeError && (
+                  <div style={{
+                    padding: '10px 14px', marginBottom: 14,
+                    background: 'rgba(255,59,59,0.12)',
+                    borderRadius: 'var(--radius-sm)',
+                    color: '#ff7070', fontSize: 13, lineHeight: 1.5,
+                  }}>
+                    {codeError}
+                  </div>
+                )}
+
+                <button
+                  type="submit"
+                  className="btn-primary"
+                  disabled={code.length !== 6 || codeLoading}
+                >
+                  {codeLoading ? 'Verifying…' : 'Confirm →'}
+                </button>
+              </form>
+
+              <button
+                type="button"
+                onClick={() => { setChallengeEmail(null); setCode(''); setCodeError(null) }}
+                style={{ display: 'block', width: '100%', textAlign: 'center', marginTop: 16, fontSize: 13, color: 'var(--muted)', background: 'none', border: 'none', cursor: 'pointer' }}
+              >
+                ← Back to login
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   return (

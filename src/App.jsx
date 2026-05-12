@@ -9,6 +9,7 @@ import PulseHistory from './pages/PulseHistory'
 import Profile from './pages/Profile'
 import ResetPassword from './pages/ResetPassword'
 import VerifyEmail from './pages/VerifyEmail'
+import VerifyLogin from './pages/VerifyLogin'
 import BottomNav from './components/BottomNav'
 
 function Router() {
@@ -30,6 +31,7 @@ function Router() {
         <Routes>
           <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/verify-email"   element={<VerifyEmail />} />
+          <Route path="/verify-login"   element={<VerifyLogin />} />
           <Route path="*" element={<AuthScreen />} />
         </Routes>
       </div>

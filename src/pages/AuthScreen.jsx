@@ -262,9 +262,9 @@ export default function AuthScreen() {
                     onChange={e => setPassword(e.target.value)}
                     autoComplete={tab === 'login' ? 'current-password' : 'new-password'}
                   />
-                  <span className="input-icon" onClick={() => setShowPassword(v => !v)} style={{ cursor: 'pointer' }}>
+                  <button type="button" className="input-icon" onClick={() => setShowPassword(v => !v)} style={{ cursor: 'pointer', pointerEvents: 'all', background: 'none', border: 'none', padding: 0 }}>
                     {showPassword ? <EyeOff size={15} strokeWidth={1.75} /> : <Eye size={15} strokeWidth={1.75} />}
-                  </span>
+                  </button>
                 </div>
 
                 {tab === 'login' && (
@@ -323,9 +323,9 @@ export default function AuthScreen() {
                         onChange={e => setConfirm(e.target.value)}
                         autoComplete="new-password"
                       />
-                      <span className="input-icon" onClick={() => setShowConfirm(v => !v)} style={{ cursor: 'pointer' }}>
+                      <button type="button" className="input-icon" onClick={() => setShowConfirm(v => !v)} style={{ cursor: 'pointer', pointerEvents: 'all', background: 'none', border: 'none', padding: 0 }}>
                         {showConfirm ? <EyeOff size={15} strokeWidth={1.75} /> : <Eye size={15} strokeWidth={1.75} />}
-                      </span>
+                      </button>
                     </div>
 
                     <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 10, cursor: 'pointer' }}>

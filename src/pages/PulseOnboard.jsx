@@ -236,29 +236,6 @@ function StepPeers({ peers, selected, onToggle, onAddCustom, onConfirm, loading 
         These are channels in your niche. We'll monitor them daily to find songs that are breaking out before you post.
       </div>
 
-      <div className="peer-count-note">{selected.size} of {peers.length} selected</div>
-
-      <div className="peer-list">
-        {peers.map(peer => (
-          <div
-            key={peer.channelId}
-            className={`peer-item${selected.has(peer.channelId) ? ' selected' : ''}`}
-            onClick={() => onToggle(peer.channelId)}
-          >
-            <div className="peer-avatar">
-              {peer.avatar ? <img src={peer.avatar} alt="" /> : peer.name[0]}
-            </div>
-            <div className="peer-info">
-              <div className="peer-name">{peer.name}</div>
-              <div className="peer-subs">{peer.subs} subscribers</div>
-            </div>
-            <div className="peer-check">
-              {selected.has(peer.channelId) ? <Check size={16} strokeWidth={2.5} /> : ''}
-            </div>
-          </div>
-        ))}
-      </div>
-
       <div className="peer-add-row">
         <div className="input-wrap" style={{ flex: 1, marginBottom: 0 }}>
           <input
@@ -282,6 +259,29 @@ function StepPeers({ peers, selected, onToggle, onAddCustom, onConfirm, loading 
       >
         {loading ? 'Saving…' : `Lock in ${selected.size} peers →`}
       </button>
+
+      <div className="peer-count-note" style={{ marginTop: 16 }}>{selected.size} of {peers.length} selected</div>
+
+      <div className="peer-list">
+        {peers.map(peer => (
+          <div
+            key={peer.channelId}
+            className={`peer-item${selected.has(peer.channelId) ? ' selected' : ''}`}
+            onClick={() => onToggle(peer.channelId)}
+          >
+            <div className="peer-avatar">
+              {peer.avatar ? <img src={peer.avatar} alt="" /> : peer.name[0]}
+            </div>
+            <div className="peer-info">
+              <div className="peer-name">{peer.name}</div>
+              <div className="peer-subs">{peer.subs} subscribers</div>
+            </div>
+            <div className="peer-check">
+              {selected.has(peer.channelId) ? <Check size={16} strokeWidth={2.5} /> : ''}
+            </div>
+          </div>
+        ))}
+      </div>
     </>
   )
 }

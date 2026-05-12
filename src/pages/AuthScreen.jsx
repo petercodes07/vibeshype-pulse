@@ -79,7 +79,7 @@ export default function AuthScreen() {
     setLoading(true)
     try {
       if (tab === 'login') {
-        await login(email, password)
+        await login(email, password, rememberMe)
       } else {
         await register(email, password, emailOptIn)
       }

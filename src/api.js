@@ -42,7 +42,7 @@ async function req(path, opts = {}) {
 export const auth = {
   me:             ()                                    => req('/api/auth/me'),
   updateMe:       (fields)                              => req('/api/auth/me',                { method: 'PATCH', body: JSON.stringify(fields) }),
-  login:          (email, password)                     => req('/api/auth/login',             { method: 'POST',  body: JSON.stringify({ email, password }) }),
+  login:          (email, password, rememberMe = false)  => req('/api/auth/login',             { method: 'POST',  body: JSON.stringify({ email, password, rememberMe }) }),
   register:       (email, password, emailOptIn = false) => req('/api/auth/register',          { method: 'POST',  body: JSON.stringify({ email, password, acceptedTerms: true, emailOptIn }) }),
   logout:         ()                                    => req('/api/auth/logout',            { method: 'POST' }),
   forgotPassword: (email)                               => req('/api/auth/forgot-password',   { method: 'POST',  body: JSON.stringify({ email }) }),

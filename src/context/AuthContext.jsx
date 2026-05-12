@@ -19,11 +19,11 @@ export function AuthProvider({ children }) {
       })
   }, [])
 
-  async function login(email, password) {
-    const data = await auth.login(email, password)
+  async function login(email, password, rememberMe = false) {
+    const data = await auth.login(email, password, rememberMe)
     const token = data.token
     if (!token) throw new Error('No token returned from server.')
-    storage.set('pulse_token', token)
+    storage.set('pulse_token', token, { persist: rememberMe })
     setUser(data.user ?? { email })
     return data
   }

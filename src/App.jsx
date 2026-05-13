@@ -9,6 +9,8 @@ import PulseHistory from './pages/PulseHistory'
 import Profile from './pages/Profile'
 import ResetPassword from './pages/ResetPassword'
 import VerifyLogin from './pages/VerifyLogin'
+import ConnectChannel from './pages/ConnectChannel'
+import Competitors from './pages/Competitors'
 import BottomNav from './components/BottomNav'
 
 function Router() {
@@ -47,6 +49,8 @@ function Router() {
         <Route path="/pulse/peers"   element={onboarded ? <PulsePeers />   : <Navigate to="/pulse/onboard" replace />} />
         <Route path="/pulse/history" element={onboarded ? <PulseHistory /> : <Navigate to="/pulse/onboard" replace />} />
         <Route path="/pulse/profile" element={onboarded ? <Profile />     : <Navigate to="/pulse/onboard" replace />} />
+        <Route path="/connect"       element={<ConnectChannel />} />
+        <Route path="/competitors"   element={<Competitors />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
       {onboarded && <BottomNav />}

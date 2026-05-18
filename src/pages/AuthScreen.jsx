@@ -1,14 +1,15 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { auth } from '../api'
-import { Mail, Lock, Eye, EyeOff, AtSign } from 'lucide-react'
+import { Mail, Lock, Eye, EyeOff, User, ArrowLeft, ArrowRight, Sparkles } from 'lucide-react'
 
 export default function AuthScreen() {
   const { login, completeLogin, register } = useAuth()
   const navigate = useNavigate()
   const [tab, setTab] = useState('login')
 
+  // 2-step login challenge
   const [challengeEmail, setChallengeEmail] = useState(null)
   const [code, setCode] = useState('')
   const [codeError, setCodeError] = useState(null)
@@ -17,8 +18,8 @@ export default function AuthScreen() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
+  const [name, setName] = useState('')
   const [acceptedTerms, setAcceptedTerms] = useState(false)
-  const [emailOptIn, setEmailOptIn] = useState(false)
   const [error, setError] = useState(null)
   const [conflictEmail, setConflictEmail] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -27,70 +28,59 @@ export default function AuthScreen() {
   const [showConfirm, setShowConfirm] = useState(false)
   const [rememberMe, setRememberMe] = useState(false)
 
-  const [username, setUsername] = useState('')
-  const [usernameStatus, setUsernameStatus] = useState(null) // null | 'checking' | 'available' | 'taken' | 'invalid'
-  const debounceRef = useRef(null)
-
   const [showForgot, setShowForgot] = useState(false)
   const [forgotEmail, setForgotEmail] = useState('')
   const [forgotLoading, setForgotLoading] = useState(false)
   const [forgotError, setForgotError] = useState(null)
   const [forgotSent, setForgotSent] = useState(false)
-
-  const USERNAME_RE = /^[a-zA-Z0-9_]{3,20}$/
-
-  useEffect(() => {
-    if (tab !== 'signup' || !username) { setUsernameStatus(null); return }
-    if (!USERNAME_RE.test(username)) { setUsernameStatus('invalid'); return }
-    setUsernameStatus('checking')
-    clearTimeout(debounceRef.current)
-    debounceRef.current = setTimeout(async () => {
-      try {
-        const data = await auth.checkUsername(username)
-        setUsernameStatus(data.available ? 'available' : 'taken')
-      } catch {
-        setUsernameStatus(null)
-      }
-    }, 300)
-    return () => clearTimeout(debounceRef.current)
-  }, [username, tab])
+  const [forgotCode, setForgotCode] = useState('')
+  const [forgotPassword, setForgotPassword] = useState('')
+  const [forgotConfirm, setForgotConfirm] = useState('')
+  const [forgotDone, setForgotDone] = useState(false)
 
   function switchTab(t) {
     setTab(t)
-    setError(null)
-    setConflictEmail(false)
-    setEmail('')
-    setPassword('')
-    setConfirm('')
+    setError(null); setConflictEmail(false)
+    setEmail(''); setPassword(''); setConfirm(''); setName('')
     setAcceptedTerms(false)
-    setEmailOptIn(false)
-    setShowForgot(false)
-    setForgotSent(false)
-    setForgotError(null)
-    setUsername('')
-    setUsernameStatus(null)
+    setShowForgot(false); setForgotSent(false); setForgotError(null)
+    setForgotCode(''); setForgotPassword(''); setForgotConfirm(''); setForgotDone(false)
   }
 
   function openForgot() {
     setShowForgot(true)
     setForgotEmail(email)
-    setForgotError(null)
-    setForgotSent(false)
+    setForgotError(null); setForgotSent(false)
+    setForgotCode(''); setForgotPassword(''); setForgotConfirm(''); setForgotDone(false)
   }
 
   async function handleForgot(e) {
     e.preventDefault()
-    setForgotError(null)
-    setForgotLoading(true)
+    setForgotError(null); setForgotLoading(true)
     try {
       await auth.forgotPassword(forgotEmail)
       setForgotSent(true)
     } catch (err) {
-      if (err.name === 'AbortError' || !err.status) {
-        setForgotError('Could not reach the server. Check your connection.')
-      } else {
-        setForgotError('Something went wrong. Please try again.')
-      }
+      if (err.name === 'AbortError' || !err.status) setForgotError('Could not reach the server. Check your connection.')
+      else setForgotError('Something went wrong. Please try again.')
+    } finally {
+      setForgotLoading(false)
+    }
+  }
+
+  async function handleReset(e) {
+    e.preventDefault()
+    setForgotError(null)
+    if (forgotPassword.length < 8) return setForgotError('Password must be at least 8 characters.')
+    if (forgotPassword !== forgotConfirm) return setForgotError('Passwords do not match.')
+    setForgotLoading(true)
+    try {
+      await auth.resetPassword(forgotEmail, forgotCode.trim(), forgotPassword)
+      setForgotDone(true)
+    } catch (err) {
+      if (err.name === 'AbortError' || !err.status) setForgotError('Could not reach the server. Check your connection.')
+      else if (err.status === 400 || err.status === 404) setForgotError('Incorrect or expired code. Try again.')
+      else setForgotError('Something went wrong. Please try again.')
     } finally {
       setForgotLoading(false)
     }
@@ -98,14 +88,10 @@ export default function AuthScreen() {
 
   async function handleSubmit(e) {
     e.preventDefault()
-    setError(null)
-    setConflictEmail(false)
+    setError(null); setConflictEmail(false)
 
     if (tab === 'signup') {
-      if (!username) return setError('Please choose a username.')
-      if (usernameStatus === 'invalid') return setError('Username must be 3–20 chars, letters, numbers, underscores only.')
-      if (usernameStatus === 'taken') return setError('That username is already taken.')
-      if (usernameStatus !== 'available') return setError('Please wait for username check to complete.')
+      if (!name.trim()) return setError('Please enter your name.')
       if (password.length < 8) return setError('Password must be at least 8 characters.')
       if (password !== confirm) return setError('Passwords do not match.')
       if (!acceptedTerms) return setError('Please accept the Terms of Service to continue.')
@@ -114,12 +100,11 @@ export default function AuthScreen() {
     setLoading(true)
     try {
       if (tab === 'login') {
-        const data = await login(email, password, rememberMe)
-        if (data.challengeRequired) {
-          setChallengeEmail(data.email ?? email)
-        }
+        const data = await login(email, password)
+        // Login is always two-step — server emailed a code.
+        if (data?.challengeRequired) setChallengeEmail(data.email ?? email)
       } else {
-        await register(email, password, emailOptIn, username)
+        await register(email, password, name.trim())
         navigate(`/verify-email?email=${encodeURIComponent(email)}`)
       }
     } catch (err) {
@@ -143,52 +128,73 @@ export default function AuthScreen() {
 
   async function handleCode(e) {
     e.preventDefault()
-    setCodeError(null)
-    setCodeLoading(true)
+    setCodeError(null); setCodeLoading(true)
     try {
       await completeLogin(challengeEmail, code.trim(), rememberMe)
     } catch (err) {
-      if (err.status === 401) {
-        setCodeError('Incorrect code. Check your email and try again.')
-      } else if (err.status === 429) {
-        setCodeError('Too many attempts. Request a new login link.')
-      } else if (err.status === 400) {
-        setCodeError('Code expired or invalid. Go back and log in again.')
-      } else if (err.name === 'AbortError' || !err.status) {
-        setCodeError('Could not reach the server. Check your connection.')
-      } else {
-        setCodeError('Something went wrong. Please try again.')
-      }
+      if (err.status === 401) setCodeError('Incorrect code. Check your email and try again.')
+      else if (err.status === 429) setCodeError('Too many attempts. Request a new login link.')
+      else if (err.status === 400) setCodeError('Code expired or invalid. Go back and log in again.')
+      else if (err.name === 'AbortError' || !err.status) setCodeError('Could not reach the server. Check your connection.')
+      else setCodeError('Something went wrong. Please try again.')
     } finally {
       setCodeLoading(false)
     }
   }
 
+  const Hero = (
+    <aside className="auth-hero">
+      <div className="auth-hero-brand">Vibe<span>Shype</span> Pulse</div>
+
+      <div className="auth-hero-pitch">
+        <div className="auth-hero-title">
+          Know what to <em>post next</em>.<br />Every day.
+        </div>
+        <div className="auth-hero-sub">
+          Pulse watches your niche, surfaces what's trending, and gives you a
+          ready-to-post pick before your coffee goes cold.
+        </div>
+        <div className="auth-hero-bullets">
+          <div className="auth-hero-bullet"><span className="auth-hero-bullet-dot" /> Daily AI-picked content ideas</div>
+          <div className="auth-hero-bullet"><span className="auth-hero-bullet-dot" /> Tracks the peers you actually care about</div>
+          <div className="auth-hero-bullet"><span className="auth-hero-bullet-dot" /> Learns from what works for you</div>
+        </div>
+      </div>
+
+      <div className="auth-hero-foot">© VibeShype · Built for creators</div>
+    </aside>
+  )
+
+  // ── Challenge (login code) view ──
   if (challengeEmail) {
     return (
       <div className="screen-bare">
-        <div className="onboard-screen">
-          <div>
-            <div className="onboard-logo">Vibe<span>Shype</span> Pulse</div>
-            <div style={{ fontSize: 13, color: 'var(--gray)', marginTop: 4 }}>
-              Know what to post next. Every day.
-            </div>
-          </div>
+        <div className="auth-shell">
+          {Hero}
+          <div className="auth-pane">
+            <div className="auth-card">
+              <div className="auth-card-brand">Vibe<span>Shype</span> Pulse</div>
 
-          <div style={{ flex: 1, display: 'flex', alignItems: 'center' }}>
-            <div style={{ width: '100%' }}>
-              <div style={{ fontSize: 20, fontWeight: 800, marginBottom: 8, letterSpacing: '-0.4px' }}>
-                Check your email
-              </div>
-              <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 28, lineHeight: 1.65 }}>
+              <button
+                type="button"
+                className="back-link"
+                onClick={() => { setChallengeEmail(null); setCode(''); setCodeError(null) }}
+              >
+                <ArrowLeft size={14} /> Back to login
+              </button>
+
+              <div className="auth-card-eyebrow">Verify it's you</div>
+              <div className="auth-card-title">Check your email</div>
+              <div className="auth-card-sub">
                 We sent a 6-digit code to{' '}
                 <span style={{ color: 'var(--light)', fontWeight: 600 }}>{challengeEmail}</span>.
-                {' '}Enter it below or click the link in the email.
+                Enter it below or click the link in the email.
               </div>
 
               <form onSubmit={handleCode}>
                 <div className="input-wrap">
                   <input
+                    className="code-input"
                     type="text"
                     inputMode="numeric"
                     pattern="[0-9]*"
@@ -197,37 +203,15 @@ export default function AuthScreen() {
                     value={code}
                     onChange={e => setCode(e.target.value.replace(/\D/g, ''))}
                     autoFocus
-                    style={{ letterSpacing: '0.3em', fontSize: 22, textAlign: 'center' }}
                   />
                 </div>
 
-                {codeError && (
-                  <div style={{
-                    padding: '10px 14px', marginBottom: 14,
-                    background: 'rgba(255,59,59,0.12)',
-                    borderRadius: 'var(--radius-sm)',
-                    color: '#ff7070', fontSize: 13, lineHeight: 1.5,
-                  }}>
-                    {codeError}
-                  </div>
-                )}
+                {codeError && <div className="auth-alert error">{codeError}</div>}
 
-                <button
-                  type="submit"
-                  className="btn-primary"
-                  disabled={code.length !== 6 || codeLoading}
-                >
-                  {codeLoading ? 'Verifying…' : 'Confirm →'}
+                <button type="submit" className="btn-primary" disabled={code.length !== 6 || codeLoading}>
+                  {codeLoading ? 'Verifying…' : <>Confirm <ArrowRight size={16} style={{ verticalAlign: -3, marginLeft: 4 }} /></>}
                 </button>
               </form>
-
-              <button
-                type="button"
-                onClick={() => { setChallengeEmail(null); setCode(''); setCodeError(null) }}
-                style={{ display: 'block', width: '100%', textAlign: 'center', marginTop: 16, fontSize: 13, color: 'var(--muted)', background: 'none', border: 'none', cursor: 'pointer' }}
-              >
-                ← Back to login
-              </button>
             </div>
           </div>
         </div>
@@ -235,279 +219,298 @@ export default function AuthScreen() {
     )
   }
 
-  return (
-    <div className="screen-bare">
-      <div className="onboard-screen">
-        <div>
-          <div className="onboard-logo">Vibe<span>Shype</span> Pulse</div>
-          <div style={{ fontSize: 13, color: 'var(--gray)', marginTop: 4 }}>
-            Know what to post next. Every day.
+  // ── Forgot password view ──
+  if (showForgot) {
+    return (
+      <div className="screen-bare">
+        <div className="auth-shell">
+          {Hero}
+          <div className="auth-pane">
+            <div className="auth-card">
+              <div className="auth-card-brand">Vibe<span>Shype</span> Pulse</div>
+
+              <button type="button" className="back-link" onClick={() => setShowForgot(false)}>
+                <ArrowLeft size={14} /> Back to login
+              </button>
+
+              <div className="auth-card-eyebrow">Password reset</div>
+              <div className="auth-card-title">Reset your password</div>
+              <div className="auth-card-sub">
+                Enter your email and — if there's an account — we'll send a link to set a new password.
+              </div>
+
+              {forgotDone ? (
+                <div className="auth-alert success">
+                  ✓ Password updated. You can now log in with your new password.
+                </div>
+              ) : forgotSent ? (
+                <form onSubmit={handleReset}>
+                  <div className="auth-card-sub" style={{ marginBottom: 16 }}>
+                    We sent a 6-digit code to <strong>{forgotEmail}</strong>. Enter it below along with your new password.
+                  </div>
+                  <div className="input-wrap">
+                    <input
+                      className="code-input"
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      placeholder="000000"
+                      maxLength={6}
+                      value={forgotCode}
+                      onChange={e => setForgotCode(e.target.value.replace(/\D/g, ''))}
+                      autoFocus
+                    />
+                  </div>
+                  <div className="input-wrap">
+                    <span className="input-icon left"><Lock size={15} strokeWidth={1.75} /></span>
+                    <input
+                      type="password"
+                      placeholder="New password"
+                      value={forgotPassword}
+                      onChange={e => setForgotPassword(e.target.value)}
+                      autoComplete="new-password"
+                    />
+                  </div>
+                  <div className="input-wrap">
+                    <span className="input-icon left"><Lock size={15} strokeWidth={1.75} /></span>
+                    <input
+                      type="password"
+                      placeholder="Confirm new password"
+                      value={forgotConfirm}
+                      onChange={e => setForgotConfirm(e.target.value)}
+                      autoComplete="new-password"
+                    />
+                  </div>
+                  {forgotError && <div className="auth-alert error">{forgotError}</div>}
+                  <button type="submit" className="btn-primary" disabled={forgotCode.length !== 6 || !forgotPassword || !forgotConfirm || forgotLoading}>
+                    {forgotLoading ? 'Saving…' : <>Set new password <ArrowRight size={16} style={{ verticalAlign: -3, marginLeft: 4 }} /></>}
+                  </button>
+                </form>
+              ) : (
+                <form onSubmit={handleForgot}>
+                  <div className="input-wrap">
+                    <span className="input-icon left"><Mail size={15} strokeWidth={1.75} /></span>
+                    <input
+                      type="email"
+                      placeholder="you@example.com"
+                      value={forgotEmail}
+                      onChange={e => setForgotEmail(e.target.value)}
+                      autoComplete="email"
+                      autoFocus
+                      required
+                    />
+                  </div>
+                  {forgotError && <div className="auth-alert error">{forgotError}</div>}
+                  <button type="submit" className="btn-primary" disabled={!forgotEmail.trim() || forgotLoading}>
+                    {forgotLoading ? 'Sending…' : <>Send code <ArrowRight size={16} style={{ verticalAlign: -3, marginLeft: 4 }} /></>}
+                  </button>
+                </form>
+              )}
+            </div>
           </div>
         </div>
+      </div>
+    )
+  }
 
-        <div style={{ flex: 1, display: 'flex', alignItems: 'center' }}>
-          <div style={{ width: '100%' }}>
+  // ── Main login / signup view ──
+  return (
+    <div className="screen-bare">
+      <div className="auth-shell">
+        {Hero}
+        <div className="auth-pane">
+          <div className="auth-card">
+            <div className="auth-card-brand">Vibe<span>Shype</span> Pulse</div>
 
-            {/* Tabs */}
-            <div style={{
-              display: 'flex',
-              background: 'var(--surface)',
-              borderRadius: 'var(--radius-sm)',
-              padding: 3,
-              marginBottom: 24,
-              border: '1px solid var(--border)',
-            }}>
+            <div className="auth-card-eyebrow">
+              <Sparkles size={11} style={{ verticalAlign: -1, marginRight: 4 }} />
+              {tab === 'login' ? 'Welcome back' : 'Get started'}
+            </div>
+            <div className="auth-card-title">
+              {tab === 'login' ? 'Log in to Pulse' : 'Create your account'}
+            </div>
+            <div className="auth-card-sub">
+              {tab === 'login'
+                ? "We'll email you a 6-digit code to sign in."
+                : "Free to start. We'll verify your email next."}
+            </div>
+
+            <div className="auth-tabs" role="tablist">
               {['login', 'signup'].map(t => (
                 <button
                   key={t}
                   type="button"
+                  role="tab"
+                  aria-selected={tab === t}
+                  className={`auth-tab ${tab === t ? 'active' : ''}`}
                   onClick={() => switchTab(t)}
-                  style={{
-                    flex: 1,
-                    padding: '8px 0',
-                    borderRadius: 'calc(var(--radius-sm) - 2px)',
-                    background: tab === t ? 'var(--accent)' : 'transparent',
-                    color: tab === t ? '#fff' : 'var(--muted)',
-                    fontWeight: 700,
-                    fontSize: 13,
-                    border: 'none',
-                    cursor: 'pointer',
-                    transition: 'background 0.15s, color 0.15s',
-                  }}
                 >
                   {t === 'login' ? 'Log in' : 'Sign up'}
                 </button>
               ))}
             </div>
 
-            {/* Inline forgot password view */}
-            {showForgot && (
-              <div style={{ marginBottom: 24 }}>
+            <form onSubmit={handleSubmit}>
+              {tab === 'signup' && (
+                <div className="input-wrap">
+                  <span className="input-icon left"><User size={15} strokeWidth={1.75} /></span>
+                  <input
+                    type="text"
+                    name="name"
+                    placeholder="Your name"
+                    value={name}
+                    onChange={e => setName(e.target.value)}
+                    autoComplete="name"
+                    maxLength={60}
+                  />
+                </div>
+              )}
+
+              <div className="input-wrap">
+                <span className="input-icon left"><Mail size={15} strokeWidth={1.75} /></span>
+                <input
+                  type="email"
+                  name="email"
+                  placeholder="you@example.com"
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  autoComplete="email"
+                  autoFocus={tab === 'login'}
+                />
+              </div>
+
+              <div className="input-wrap">
+                <span className="input-icon left"><Lock size={15} strokeWidth={1.75} /></span>
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  name="password"
+                  placeholder="Password"
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                  autoComplete={tab === 'login' ? 'current-password' : 'new-password'}
+                />
                 <button
                   type="button"
-                  onClick={() => setShowForgot(false)}
-                  style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--muted)', fontSize: 13, marginBottom: 20, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+                  className="input-icon right"
+                  onClick={() => setShowPassword(v => !v)}
+                  style={{ cursor: 'pointer', pointerEvents: 'all', background: 'none', border: 'none', padding: 0 }}
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
                 >
-                  ← Back to login
+                  {showPassword ? <EyeOff size={15} strokeWidth={1.75} /> : <Eye size={15} strokeWidth={1.75} />}
                 </button>
-                <div style={{ fontSize: 17, fontWeight: 700, marginBottom: 6 }}>Reset your password</div>
-                <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 20, lineHeight: 1.55 }}>
-                  Enter your email and we'll send you a link to reset your password.
-                </div>
-                {forgotSent ? (
-                  <div style={{
-                    padding: '12px 16px',
-                    background: 'rgba(29,185,84,0.12)',
-                    borderRadius: 'var(--radius-sm)',
-                    color: 'var(--secondary)',
-                    fontSize: 13, lineHeight: 1.5,
-                  }}>
-                    Check your email for a reset link.
-                  </div>
-                ) : (
-                  <form onSubmit={handleForgot}>
-                    <div className="input-wrap">
-                      <input
-                        type="email"
-                        placeholder="Email"
-                        value={forgotEmail}
-                        onChange={e => setForgotEmail(e.target.value)}
-                        autoComplete="email"
-                        autoFocus
-                        required
-                      />
-                      <span className="input-icon"><Mail size={15} strokeWidth={1.75} /></span>
-                    </div>
-                    {forgotError && (
-                      <div style={{
-                        padding: '10px 14px', marginBottom: 14,
-                        background: 'rgba(255,59,59,0.12)',
-                        borderRadius: 'var(--radius-sm)',
-                        color: '#ff7070', fontSize: 13, lineHeight: 1.5,
-                      }}>
-                        {forgotError}
-                      </div>
-                    )}
-                    <button
-                      type="submit"
-                      className="btn-primary"
-                      disabled={!forgotEmail.trim() || forgotLoading}
-                    >
-                      {forgotLoading ? 'Sending…' : 'Send reset link →'}
-                    </button>
-                  </form>
-                )}
               </div>
-            )}
 
-            {!showForgot && (
-              <form onSubmit={handleSubmit}>
+              {tab === 'signup' && (
                 <div className="input-wrap">
+                  <span className="input-icon left"><Lock size={15} strokeWidth={1.75} /></span>
                   <input
-                    type="email"
-                    name="email"
-                    placeholder="Email"
-                    value={email}
-                    onChange={e => setEmail(e.target.value)}
-                    autoComplete="email"
-                    autoFocus
+                    type={showConfirm ? 'text' : 'password'}
+                    name="confirm-password"
+                    placeholder="Confirm password"
+                    value={confirm}
+                    onChange={e => setConfirm(e.target.value)}
+                    autoComplete="new-password"
                   />
-                  <span className="input-icon"><Mail size={15} strokeWidth={1.75} /></span>
-                </div>
-
-                <div className="input-wrap">
-                  <input
-                    type={showPassword ? 'text' : 'password'}
-                    name="password"
-                    placeholder="Password"
-                    value={password}
-                    onChange={e => setPassword(e.target.value)}
-                    autoComplete={tab === 'login' ? 'current-password' : 'new-password'}
-                  />
-                  <button type="button" className="input-icon" onClick={() => setShowPassword(v => !v)} style={{ cursor: 'pointer', pointerEvents: 'all', background: 'none', border: 'none', padding: 0 }}>
-                    {showPassword ? <EyeOff size={15} strokeWidth={1.75} /> : <Eye size={15} strokeWidth={1.75} />}
+                  <button
+                    type="button"
+                    className="input-icon right"
+                    onClick={() => setShowConfirm(v => !v)}
+                    style={{ cursor: 'pointer', pointerEvents: 'all', background: 'none', border: 'none', padding: 0 }}
+                    aria-label={showConfirm ? 'Hide password' : 'Show password'}
+                  >
+                    {showConfirm ? <EyeOff size={15} strokeWidth={1.75} /> : <Eye size={15} strokeWidth={1.75} />}
                   </button>
                 </div>
+              )}
 
-                {tab === 'login' && (
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, marginTop: -8 }}>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
-                      <input
-                        type="checkbox"
-                        checked={rememberMe}
-                        onChange={e => setRememberMe(e.target.checked)}
-                        style={{ accentColor: 'var(--accent)' }}
-                      />
-                      <span style={{ fontSize: 12, color: 'var(--muted)' }}>Remember me</span>
-                    </label>
-                    <button
-                      type="button"
-                      onClick={openForgot}
-                      style={{ fontSize: 12, color: 'var(--muted)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
-                    >
-                      Forgot password?
-                    </button>
-                  </div>
-                )}
+              {tab === 'login' && (
+                <div className="auth-row">
+                  <label className="auth-check">
+                    <input
+                      type="checkbox"
+                      checked={rememberMe}
+                      onChange={e => setRememberMe(e.target.checked)}
+                    />
+                    <span>Remember me</span>
+                  </label>
+                  <button type="button" onClick={openForgot} className="auth-link">
+                    Forgot password?
+                  </button>
+                </div>
+              )}
 
-                {tab === 'signup' && (
-                  <>
-                    <div className="input-wrap">
-                      <input
-                        type="text"
-                        name="username"
-                        placeholder="Username"
-                        value={username}
-                        onChange={e => setUsername(e.target.value.replace(/\s/g, ''))}
-                        autoComplete="username"
-                        maxLength={20}
-                      />
-                      <span className="input-icon"><AtSign size={15} strokeWidth={1.75} /></span>
-                    </div>
-                    {username.length > 0 && (
-                      <div style={{ fontSize: 11, marginTop: -10, marginBottom: 12, paddingLeft: 2, color:
-                        usernameStatus === 'available' ? 'var(--secondary)' :
-                        usernameStatus === 'taken' || usernameStatus === 'invalid' ? '#ff7070' : 'var(--muted)'
-                      }}>
-                        {usernameStatus === 'checking' && 'Checking…'}
-                        {usernameStatus === 'available' && '✓ Available'}
-                        {usernameStatus === 'taken' && '✗ Username already taken'}
-                        {usernameStatus === 'invalid' && '✗ 3–20 chars, letters, numbers, underscores only'}
-                      </div>
-                    )}
+              {tab === 'signup' && (
+                <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 16, cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={acceptedTerms}
+                    onChange={e => setAcceptedTerms(e.target.checked)}
+                    style={{ marginTop: 2, accentColor: 'var(--primary)', flexShrink: 0 }}
+                  />
+                  <span style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.5 }}>
+                    I agree to the{' '}
+                    <span style={{ color: 'var(--light)', textDecoration: 'underline' }}>Terms of Service</span>
+                    {' '}and{' '}
+                    <span style={{ color: 'var(--light)', textDecoration: 'underline' }}>Privacy Policy</span>
+                  </span>
+                </label>
+              )}
 
-                    <div className="input-wrap">
-                      <input
-                        type={showConfirm ? 'text' : 'password'}
-                        name="confirm-password"
-                        placeholder="Confirm password"
-                        value={confirm}
-                        onChange={e => setConfirm(e.target.value)}
-                        autoComplete="new-password"
-                      />
-                      <button type="button" className="input-icon" onClick={() => setShowConfirm(v => !v)} style={{ cursor: 'pointer', pointerEvents: 'all', background: 'none', border: 'none', padding: 0 }}>
-                        {showConfirm ? <EyeOff size={15} strokeWidth={1.75} /> : <Eye size={15} strokeWidth={1.75} />}
-                      </button>
-                    </div>
+              {conflictEmail && (
+                <div className="auth-alert error">
+                  An account with that email already exists.{' '}
+                  <button
+                    type="button"
+                    onClick={() => switchTab('login')}
+                    style={{ color: 'var(--primary)', fontWeight: 700, background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: 13 }}
+                  >
+                    Go to login →
+                  </button>
+                </div>
+              )}
 
-                    <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 10, cursor: 'pointer' }}>
-                      <input
-                        type="checkbox"
-                        checked={acceptedTerms}
-                        onChange={e => setAcceptedTerms(e.target.checked)}
-                        style={{ marginTop: 2, accentColor: 'var(--accent)', flexShrink: 0 }}
-                      />
-                      <span style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.5 }}>
-                        I agree to the{' '}
-                        <span style={{ color: 'var(--light)', textDecoration: 'underline' }}>Terms of Service</span>
-                        {' '}and{' '}
-                        <span style={{ color: 'var(--light)', textDecoration: 'underline' }}>Privacy Policy</span>
-                      </span>
-                    </label>
+              {error && <div className="auth-alert error">{error}</div>}
 
-                    <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 16, cursor: 'pointer' }}>
-                      <input
-                        type="checkbox"
-                        checked={emailOptIn}
-                        onChange={e => setEmailOptIn(e.target.checked)}
-                        style={{ marginTop: 2, accentColor: 'var(--accent)', flexShrink: 0 }}
-                      />
-                      <span style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.5 }}>
-                        Send me tips and product updates (optional)
-                      </span>
-                    </label>
-                  </>
-                )}
+              <button
+                type="submit"
+                className="btn-primary"
+                disabled={!email.trim() || !password.trim() || loading}
+              >
+                {loading
+                  ? (tab === 'login' ? 'Sending code…' : 'Creating account…')
+                  : (
+                    <>
+                      {tab === 'login' ? 'Continue' : 'Create account'}
+                      <ArrowRight size={16} style={{ verticalAlign: -3, marginLeft: 6 }} />
+                    </>
+                  )}
+              </button>
+            </form>
 
-                {conflictEmail && (
-                  <div style={{
-                    padding: '10px 14px', marginBottom: 14,
-                    background: 'rgba(255,59,59,0.12)',
-                    borderRadius: 'var(--radius-sm)',
-                    color: '#ff7070', fontSize: 13, lineHeight: 1.5,
-                  }}>
-                    An account with that email already exists.{' '}
-                    <button
-                      type="button"
-                      onClick={() => switchTab('login')}
-                      style={{ color: 'var(--accent)', fontWeight: 700, background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: 13 }}
-                    >
-                      Go to login →
-                    </button>
-                  </div>
-                )}
-
-                {error && (
-                  <div style={{
-                    padding: '10px 14px', marginBottom: 14,
-                    background: 'rgba(255,59,59,0.12)',
-                    borderRadius: 'var(--radius-sm)',
-                    color: '#ff7070', fontSize: 13, lineHeight: 1.5,
-                  }}>
-                    {error}
-                  </div>
-                )}
-
-                <button
-                  type="submit"
-                  className="btn-primary"
-                  disabled={!email.trim() || !password.trim() || loading}
-                >
-                  {loading
-                    ? (tab === 'login' ? 'Logging in…' : 'Creating account…')
-                    : (tab === 'login' ? 'Log in →' : 'Create account →')}
-                </button>
-              </form>
-            )}
+            <div className="auth-foot">
+              {tab === 'login' ? (
+                <>New to Pulse?{' '}
+                  <button
+                    type="button"
+                    onClick={() => switchTab('signup')}
+                    style={{ color: 'var(--primary)', fontWeight: 700, background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: 12 }}
+                  >
+                    Create an account
+                  </button>
+                </>
+              ) : (
+                <>Already have an account?{' '}
+                  <button
+                    type="button"
+                    onClick={() => switchTab('login')}
+                    style={{ color: 'var(--primary)', fontWeight: 700, background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: 12 }}
+                  >
+                    Log in
+                  </button>
+                </>
+              )}
+            </div>
           </div>
-        </div>
-
-        <div style={{ textAlign: 'center', color: 'var(--gray)', fontSize: 12, paddingBottom: 8 }}>
-          {tab === 'login' ? (
-            <>Already have an account? Just log in above.</>
-          ) : (
-            <>Already have a VibeShype account? Use those credentials.</>
-          )}
         </div>
       </div>
     </div>

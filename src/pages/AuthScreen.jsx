@@ -11,9 +11,12 @@ export default function AuthScreen() {
 
   // 2-step login challenge
   const [challengeEmail, setChallengeEmail] = useState(null)
+  const [challengePassword, setChallengePassword] = useState(null)
   const [code, setCode] = useState('')
   const [codeError, setCodeError] = useState(null)
   const [codeLoading, setCodeLoading] = useState(false)
+  const [resendLoading, setResendLoading] = useState(false)
+  const [resendSent, setResendSent] = useState(false)
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -102,7 +105,10 @@ export default function AuthScreen() {
       if (tab === 'login') {
         const data = await login(email, password)
         // Login is always two-step — server emailed a code.
-        if (data?.challengeRequired) setChallengeEmail(data.email ?? email)
+        if (data?.challengeRequired) {
+          setChallengeEmail(data.email ?? email)
+          setChallengePassword(password)
+        }
       } else {
         await register(email, password, name.trim())
         navigate(`/verify-email?email=${encodeURIComponent(email)}`)
@@ -123,6 +129,22 @@ export default function AuthScreen() {
       }
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function handleResend() {
+    if (!challengeEmail || !challengePassword) return
+    setResendLoading(true)
+    setResendSent(false)
+    setCodeError(null)
+    try {
+      await login(challengeEmail, challengePassword)
+      setResendSent(true)
+      setCode('')
+    } catch {
+      setCodeError('Could not resend code. Please go back and try again.')
+    } finally {
+      setResendLoading(false)
     }
   }
 
@@ -207,11 +229,26 @@ export default function AuthScreen() {
                 </div>
 
                 {codeError && <div className="auth-alert error">{codeError}</div>}
+                {resendSent && (
+                  <div className="auth-alert success">New code sent — check your inbox.</div>
+                )}
 
                 <button type="submit" className="btn-primary" disabled={code.length !== 6 || codeLoading}>
                   {codeLoading ? 'Verifying…' : <>Confirm <ArrowRight size={16} style={{ verticalAlign: -3, marginLeft: 4 }} /></>}
                 </button>
               </form>
+
+              <div style={{ textAlign: 'center', marginTop: 16 }}>
+                <span style={{ fontSize: 13, color: 'var(--gray)' }}>Didn't get it? </span>
+                <button
+                  type="button"
+                  onClick={handleResend}
+                  disabled={resendLoading}
+                  style={{ fontSize: 13, color: 'var(--primary)', fontWeight: 700, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+                >
+                  {resendLoading ? 'Sending…' : 'Resend code'}
+                </button>
+              </div>
             </div>
           </div>
         </div>

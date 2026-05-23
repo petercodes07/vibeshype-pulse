@@ -1,8 +1,10 @@
 import { storage } from './storage'
 import { mockAuth, mockPulse } from './mockApi'
 
-const BASE = import.meta.env.VITE_API_URL || ''
-const USE_MOCK = import.meta.env.VITE_USE_MOCK === 'true'
+const BASE       = import.meta.env.VITE_API_URL || ''
+const AUTH_BASE  = 'https://vibeshype.com'   // auth  → live server (bypasses Vite proxy)
+const PULSE_BASE = ''                         // pulse → Vite proxy → localhost:3001
+const USE_MOCK   = import.meta.env.VITE_USE_MOCK === 'true'
 
 if (USE_MOCK) {
   console.log('%c[api] MOCK MODE — no server calls will be made', 'color:#1db954;font-weight:700')
@@ -10,12 +12,21 @@ if (USE_MOCK) {
   console.log('[api] verification / login code is always: 123456')
 }
 
+function authReq(path, opts = {}) {
+  return req(path, { ...opts, _base: AUTH_BASE })
+}
+
+function pulseReq(path, opts = {}) {
+  return req(path, { ...opts, _base: PULSE_BASE })
+}
+
 async function req(path, opts = {}) {
+  const base = opts._base ?? BASE
   const token = storage.get('pulse_token')
   const controller = new AbortController()
   const timeoutMs = opts.timeout ?? 4000
   const timer = setTimeout(() => controller.abort(), timeoutMs)
-  const url = `${BASE}${path}`
+  const url = `${base}${path}`
   const method = opts.method || 'GET'
   console.log(`[api] → ${method} ${url}`)
   try {
@@ -40,7 +51,7 @@ async function req(path, opts = {}) {
     if (err.name === 'AbortError') {
       console.error(`[api] TIMEOUT ${method} ${url} (>${timeoutMs}ms)`)
     } else {
-      console.error(`[api] ERROR ${method} ${url}`, err.message)
+      console.error(`[api] ERROR ${method} ${url}`, err.message, err.body ?? '')
     }
     throw err
   } finally {
@@ -69,26 +80,30 @@ async function req(path, opts = {}) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const auth = USE_MOCK ? mockAuth : {
-  me:                 ()                                  => req('/api/auth/me'),
-  updateMe:           (fields)                            => req('/api/auth/me',                   { method: 'PATCH', body: JSON.stringify(fields) }),
-  register:           (email, password, name)             => req('/api/auth/register',             { method: 'POST',  body: JSON.stringify({ email, password, name, acceptedTerms: true }) }),
-  resendVerification: (email)                             => req('/api/auth/resend-verification',  { method: 'POST',  body: JSON.stringify({ email }) }),
-  login:              (email, password)                   => req('/api/auth/login',                { method: 'POST',  body: JSON.stringify({ email, password }) }),
-  verifyLogin:        (email, code)                       => req('/api/auth/verify-login',         { method: 'POST',  body: JSON.stringify({ email, code }) }),
-  logout:             ()                                  => req('/api/auth/logout',               { method: 'POST' }),
-  forgotPassword:     (email)                             => req('/api/auth/forgot-password',      { method: 'POST',  body: JSON.stringify({ email }) }),
-  // Magic-link verification — confirms email from the link in the verify email.
-  verifyEmail:        (token)                             => req(`/api/auth/verify-email?token=${encodeURIComponent(token)}`),
-  // Companion to forgot-password — consumes the reset token from the email link.
-  resetPassword:      (email, code, password)              => req('/api/auth/reset-password',       { method: 'POST',  body: JSON.stringify({ email, code, password }) }),
+  me:                 ()                                  => authReq('/api/auth/me'),
+  updateMe:           (fields)                            => authReq('/api/auth/me',                   { method: 'PATCH', body: JSON.stringify(fields) }),
+  register:           (email, password, name)             => authReq('/api/auth/register',             { method: 'POST',  body: JSON.stringify({ email, password, name, acceptedTerms: true }) }),
+  resendVerification: (email)                             => authReq('/api/auth/resend-verification',  { method: 'POST',  body: JSON.stringify({ email }) }),
+  login:              (email, password)                   => authReq('/api/auth/login',                { method: 'POST',  body: JSON.stringify({ email, password }) }),
+  verifyLogin:        (email, code)                       => authReq('/api/auth/verify-login',         { method: 'POST',  body: JSON.stringify({ email, code }) }),
+  logout:             ()                                  => authReq('/api/auth/logout',               { method: 'POST' }),
+  forgotPassword:     (email)                             => authReq('/api/auth/forgot-password',      { method: 'POST',  body: JSON.stringify({ email }), timeout: 10000 }),
+  verifyEmail:        (token)                             => authReq(`/api/auth/verify-email?token=${encodeURIComponent(token)}`),
+  resetPassword:      (email, code, password)             => authReq('/api/auth/reset-password',       { method: 'POST',  body: JSON.stringify({ email, code, password }) }),
+}
+
+export const rivals = {
+  activity: (channelIds) =>
+    req(`/api/rivals/activity?channelIds=${encodeURIComponent(channelIds)}`, { timeout: 15000 }),
 }
 
 export const pulse = USE_MOCK ? mockPulse : {
-  onboard:  (channelUrl)      => req('/api/pulse/onboard', { method: 'POST', body: JSON.stringify({ channelUrl }), timeout: 30000 }),
-  profile:  ()                => req('/api/pulse/profile'),
-  peers:    ()                => req('/api/pulse/peers'),
-  savePeers:(channelIds)      => req('/api/pulse/peers', { method: 'PUT', body: JSON.stringify({ channelIds }) }),
-  today:    ()                => req('/api/pulse/today'),
-  act:      (recId, action)   => req(`/api/pulse/recommendations/${recId}/action`, { method: 'POST', body: JSON.stringify({ action }) }),
-  history:  ()                => req('/api/pulse/history'),
+  onboard:       (channelUrl)  => req('/api/pulse/onboard',                          { method: 'POST', body: JSON.stringify({ channelUrl }), timeout: 15000, _base: 'https://vibeshype.com' }),
+  onboardStatus: (analysisId) => req(`/api/pulse/onboard/${encodeURIComponent(analysisId)}/status`, { timeout: 10000, _base: 'https://vibeshype.com' }),
+  profile:  ()                => pulseReq('/api/pulse/profile'),
+  peers:    ()                => pulseReq('/api/pulse/peers'),
+  savePeers:(channelIds)      => pulseReq('/api/pulse/peers', { method: 'PUT', body: JSON.stringify({ channelIds }) }),
+  today:    ()                => pulseReq('/api/pulse/today'),
+  act:      (recId, action)   => pulseReq(`/api/pulse/recommendations/${recId}/action`, { method: 'POST', body: JSON.stringify({ action }) }),
+  history:  ()                => pulseReq('/api/pulse/history'),
 }

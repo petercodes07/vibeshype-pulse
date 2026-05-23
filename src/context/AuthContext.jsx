@@ -61,4 +61,11 @@ export function AuthProvider({ children }) {
   )
 }
 
-export const useAuth = () => useContext(Ctx)
+export function useAuth() {
+  const ctx = useContext(Ctx)
+  if (!ctx) {
+    // Returned when called outside AuthProvider (e.g. during HMR boundary crossing)
+    return { user: undefined, loading: true, login: async () => {}, completeLogin: async () => {}, register: async () => {}, logout: () => {} }
+  }
+  return ctx
+}

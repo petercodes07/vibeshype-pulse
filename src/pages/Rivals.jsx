@@ -73,7 +73,7 @@ export default function Rivals() {
 
   // Fetch real AI competitors when Discover tab opens and we have a channelId
   useEffect(() => {
-    if (tab !== 1) return
+    if (tab !== 0) return
     if (!channelId) return
     if (competitorsFetched) return // don't re-fetch on every tab visit
     setCompetitors(null)

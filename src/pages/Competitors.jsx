@@ -9,6 +9,7 @@
 import { useEffect, useState } from 'react'
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { ArrowLeft, Users, ExternalLink } from 'lucide-react'
+import { competitors as competitorsApi } from '../api'
 
 export default function Competitors() {
   const location = useLocation()
@@ -25,8 +26,7 @@ export default function Competitors() {
     const channelId = searchParams.get('channelId')
     if (!channelId) { setError('No channel specified.'); setLoading(false); return }
 
-    fetch(`/api/competitors?channelId=${encodeURIComponent(channelId)}`)
-      .then(r => r.json())
+    competitorsApi.list(channelId)
       .then(data => {
         setChannel(data.channel)
         setCompetitors(data.competitors ?? [])

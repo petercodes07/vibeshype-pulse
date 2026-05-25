@@ -35,10 +35,10 @@ export function AuthProvider({ children }) {
     return data
   }
 
-  function _storeSession(data, email, rememberMe) {
+  function _storeSession(data, email, _rememberMe) {
     const token = data.token
     if (!token) throw new Error('No token in response.')
-    storage.set('pulse_token', token, { persist: rememberMe })
+    storage.set('pulse_token', token, { persist: true })
     setUser(data.user ?? { email, emailVerified: true })
   }
 

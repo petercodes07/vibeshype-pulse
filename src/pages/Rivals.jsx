@@ -11,7 +11,7 @@
 
 import { useState, useEffect } from 'react'
 import { X, Play, Tv } from 'lucide-react'
-import { rivals, pulse } from '../api'
+import { rivals, pulse, competitors as competitorsApi } from '../api'
 
 // ── localStorage helpers ──────────────────────────────────────────────────────
 
@@ -78,8 +78,7 @@ export default function Rivals() {
     if (competitorsFetched) return // don't re-fetch on every tab visit
     setCompetitors(null)
     setCompetitorsError(null)
-    fetch(`/api/competitors?channelId=${encodeURIComponent(channelId)}`)
-      .then(r => r.json())
+    competitorsApi.list(channelId)
       .then(data => { setCompetitors(data.competitors ?? []); setCompetitorsFetched(true) })
       .catch(err => { setCompetitorsError(err.message); setCompetitorsFetched(true) })
   }, [tab, channelId]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -254,13 +253,7 @@ function DiscoverTab({
     setManualLoading(true)
     setManualError(null)
     try {
-      const res = await fetch('/api/pulse/onboard', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ channelUrl: val }),
-      })
-      if (!res.ok) throw new Error(`${res.status}`)
-      const data = await res.json()
+      const data = await pulse.onboard(val)
       const id = data?.profile?.channelId
       if (!id) throw new Error('No channel ID returned')
       onChannelIdResolved(id)

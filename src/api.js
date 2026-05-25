@@ -1,9 +1,9 @@
 import { storage } from './storage'
 import { mockAuth, mockPulse } from './mockApi'
 
-const BASE       = import.meta.env.VITE_API_URL || ''
-const AUTH_BASE  = 'https://vibeshype.com'   // auth  → live server (bypasses Vite proxy)
-const PULSE_BASE = ''                         // pulse → Vite proxy → localhost:3001
+const BASE       = import.meta.env.VITE_API_URL ?? ''
+const AUTH_BASE  = ''
+const PULSE_BASE = ''
 const USE_MOCK   = import.meta.env.VITE_USE_MOCK === 'true'
 
 if (USE_MOCK) {
@@ -21,23 +21,25 @@ function pulseReq(path, opts = {}) {
 }
 
 async function req(path, opts = {}) {
-  const base = opts._base ?? BASE
+  const { _base, timeout, headers: optHeaders, ...fetchOpts } = opts
+  const base = _base ?? BASE
   const token = storage.get('pulse_token')
   const controller = new AbortController()
-  const timeoutMs = opts.timeout ?? 4000
+  const timeoutMs = timeout ?? 4000
   const timer = setTimeout(() => controller.abort(), timeoutMs)
   const url = `${base}${path}`
-  const method = opts.method || 'GET'
-  console.log(`[api] → ${method} ${url}`)
+  const method = fetchOpts.method || 'GET'
+  const finalHeaders = {
+    'Content-Type': 'application/json',
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...optHeaders,
+  }
+  console.log(`[api] → ${method} ${url} ${token ? '(auth)' : '(no token)'}`)
   try {
     const res = await fetch(url, {
+      ...fetchOpts,
       signal: controller.signal,
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        ...opts.headers,
-      },
-      ...opts,
+      headers: finalHeaders,
     })
     console.log(`[api] ← ${method} ${url} ${res.status}`)
     if (!res.ok) {
@@ -84,8 +86,8 @@ export const auth = USE_MOCK ? mockAuth : {
   updateMe:           (fields)                            => authReq('/api/auth/me',                   { method: 'PATCH', body: JSON.stringify(fields) }),
   register:           (email, password, name)             => authReq('/api/auth/register',             { method: 'POST',  body: JSON.stringify({ email, password, name, acceptedTerms: true }) }),
   resendVerification: (email)                             => authReq('/api/auth/resend-verification',  { method: 'POST',  body: JSON.stringify({ email }) }),
-  login:              (email, password)                   => authReq('/api/auth/login',                { method: 'POST',  body: JSON.stringify({ email, password }) }),
-  verifyLogin:        (email, code)                       => authReq('/api/auth/verify-login',         { method: 'POST',  body: JSON.stringify({ email, code }) }),
+  login:              (email, password)                   => authReq('/api/auth/login',                { method: 'POST',  body: JSON.stringify({ email, password }), timeout: 10000 }),
+  verifyLogin:        (email, code)                       => authReq('/api/auth/verify-login',         { method: 'POST',  body: JSON.stringify({ email, code }), timeout: 10000 }),
   logout:             ()                                  => authReq('/api/auth/logout',               { method: 'POST' }),
   forgotPassword:     (email)                             => authReq('/api/auth/forgot-password',      { method: 'POST',  body: JSON.stringify({ email }), timeout: 10000 }),
   verifyEmail:        (token)                             => authReq(`/api/auth/verify-email?token=${encodeURIComponent(token)}`),
@@ -94,12 +96,22 @@ export const auth = USE_MOCK ? mockAuth : {
 
 export const rivals = {
   activity: (channelIds) =>
-    req(`/api/rivals/activity?channelIds=${encodeURIComponent(channelIds)}`, { timeout: 15000 }),
+    pulseReq(`/api/rivals/activity?channelIds=${encodeURIComponent(channelIds)}`, { timeout: 15000 }),
+}
+
+export const competitors = {
+  list: (channelId) =>
+    pulseReq(`/api/competitors?channelId=${encodeURIComponent(channelId)}`, { timeout: 15000 }),
+}
+
+export const youtube = {
+  connect: (input) =>
+    pulseReq('/api/youtube/connect', { method: 'POST', body: JSON.stringify({ input }), timeout: 15000 }),
 }
 
 export const pulse = USE_MOCK ? mockPulse : {
-  onboard:       (channelUrl)  => req('/api/pulse/onboard',                          { method: 'POST', body: JSON.stringify({ channelUrl }), timeout: 15000, _base: 'https://vibeshype.com' }),
-  onboardStatus: (analysisId) => req(`/api/pulse/onboard/${encodeURIComponent(analysisId)}/status`, { timeout: 10000, _base: 'https://vibeshype.com' }),
+  onboard:       (channelUrl)  => pulseReq('/api/pulse/onboard',                          { method: 'POST', body: JSON.stringify({ channelUrl }), timeout: 15000 }),
+  onboardStatus: (analysisId) => pulseReq(`/api/pulse/onboard/${encodeURIComponent(analysisId)}/status`, { timeout: 10000 }),
   profile:  ()                => pulseReq('/api/pulse/profile'),
   peers:    ()                => pulseReq('/api/pulse/peers'),
   savePeers:(channelIds)      => pulseReq('/api/pulse/peers', { method: 'PUT', body: JSON.stringify({ channelIds }) }),

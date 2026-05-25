@@ -8,6 +8,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Tv, ArrowRight, Loader } from 'lucide-react'
+import { youtube } from '../api'
 
 export default function ConnectChannel() {
   const [input, setInput] = useState('')
@@ -22,18 +23,10 @@ export default function ConnectChannel() {
     setLoading(true)
 
     try {
-      const res = await fetch('/api/youtube/connect', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ input: input.trim() }),
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error ?? 'Failed to connect channel')
-
-      // Pass results to competitors page via location state
+      const data = await youtube.connect(input.trim())
       navigate('/competitors', { state: { channel: data.channel, competitors: data.competitors } })
     } catch (err) {
-      setError(err.message)
+      setError(err.body?.error ?? err.message)
     } finally {
       setLoading(false)
     }

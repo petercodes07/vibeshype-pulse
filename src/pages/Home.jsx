@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext'
 import { pulse, rivals } from '../api'
 import {
   Tv, Flame, TrendingUp, Trophy, ChevronRight,
-  Music2, Play, Check, X, Users, BarChart2,
+  Music2, Play, Check, X,
 } from 'lucide-react'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -112,28 +112,22 @@ export default function Home() {
         </div>
       </div>
 
-      {/* ── Stats bar ── */}
-      <div style={{ display: 'flex', gap: 10, padding: '16px 20px 20px' }}>
-        <StatCard
-          icon={<Tv size={16} strokeWidth={1.75} />}
-          label="Channels"
-          value={myChannels.length}
-          linkTo="/pulse/profile"
-        />
-        <StatCard
-          icon={<Users size={16} strokeWidth={1.75} />}
-          label="Competitors"
-          value={trackedRivals.length}
-          color="var(--primary)"
-          linkTo="/pulse/competitors"
-        />
-        <StatCard
-          icon={<BarChart2 size={16} strokeWidth={1.75} />}
-          label="Picks"
-          value={picksLoading ? '…' : (picks?.length ?? 0)}
-          color="var(--secondary)"
-          linkTo="/pulse/today"
-        />
+      {/* ── Stats line ── */}
+      <div style={{
+        display: 'flex', gap: 14, padding: '12px 20px 20px',
+        fontSize: 13, color: 'var(--muted)',
+      }}>
+        <Link to="/pulse/profile" style={{ color: 'inherit', textDecoration: 'none' }}>
+          <strong style={{ color: 'var(--light)' }}>{myChannels.length}</strong> channels
+        </Link>
+        <span style={{ color: 'var(--border)' }}>·</span>
+        <Link to="/pulse/competitors" style={{ color: 'inherit', textDecoration: 'none' }}>
+          <strong style={{ color: 'var(--light)' }}>{trackedRivals.length}</strong> competitors
+        </Link>
+        <span style={{ color: 'var(--border)' }}>·</span>
+        <Link to="/pulse/today" style={{ color: 'inherit', textDecoration: 'none' }}>
+          <strong style={{ color: 'var(--light)' }}>{picksLoading ? '…' : (picks?.length ?? 0)}</strong> picks
+        </Link>
       </div>
 
       <div style={{ padding: '0 16px', paddingBottom: 40, display: 'flex', flexDirection: 'column', gap: 24 }}>
@@ -330,30 +324,6 @@ function Section({ title, linkTo, linkLabel, children }) {
       {children}
     </div>
   )
-}
-
-// ── Stat card ─────────────────────────────────────────────────────────────────
-
-function StatCard({ icon, label, value, color = 'var(--light)', linkTo }) {
-  const content = (
-    <div style={{
-      flex: 1, background: 'var(--surface)', borderRadius: 'var(--radius-sm)',
-      border: '1px solid var(--border)', padding: '12px 10px',
-      display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'center',
-    }}>
-      <div style={{ color: 'var(--gray)' }}>{icon}</div>
-      <div style={{ fontSize: 22, fontWeight: 800, color, lineHeight: 1 }}>{value}</div>
-      <div style={{
-        fontSize: 10, color: 'var(--gray)', fontWeight: 600,
-        textTransform: 'uppercase', letterSpacing: '0.5px',
-      }}>
-        {label}
-      </div>
-    </div>
-  )
-  return linkTo
-    ? <Link to={linkTo} style={{ flex: 1, textDecoration: 'none' }}>{content}</Link>
-    : content
 }
 
 // ── Channel chip ──────────────────────────────────────────────────────────────

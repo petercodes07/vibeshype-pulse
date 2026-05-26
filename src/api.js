@@ -86,10 +86,10 @@ export const auth = USE_MOCK ? mockAuth : {
   updateMe:           (fields)                            => authReq('/api/auth/me',                   { method: 'PATCH', body: JSON.stringify(fields) }),
   register:           (email, password, name)             => authReq('/api/auth/register',             { method: 'POST',  body: JSON.stringify({ email, password, name, acceptedTerms: true }) }),
   resendVerification: (email)                             => authReq('/api/auth/resend-verification',  { method: 'POST',  body: JSON.stringify({ email }) }),
-  login:              (email, password)                   => authReq('/api/auth/login',                { method: 'POST',  body: JSON.stringify({ email, password }), timeout: 10000 }),
-  verifyLogin:        (email, code)                       => authReq('/api/auth/verify-login',         { method: 'POST',  body: JSON.stringify({ email, code }), timeout: 10000 }),
+  login:              (email, password)                   => authReq('/api/auth/login',                { method: 'POST',  body: JSON.stringify({ email, password }), timeout: 25000 }),
+  verifyLogin:        (email, code)                       => authReq('/api/auth/verify-login',         { method: 'POST',  body: JSON.stringify({ email, code }), timeout: 25000 }),
   logout:             ()                                  => authReq('/api/auth/logout',               { method: 'POST' }),
-  forgotPassword:     (email)                             => authReq('/api/auth/forgot-password',      { method: 'POST',  body: JSON.stringify({ email }), timeout: 10000 }),
+  forgotPassword:     (email)                             => authReq('/api/auth/forgot-password',      { method: 'POST',  body: JSON.stringify({ email }), timeout: 25000 }),
   verifyEmail:        (token)                             => authReq(`/api/auth/verify-email?token=${encodeURIComponent(token)}`),
   resetPassword:      (email, code, password)             => authReq('/api/auth/reset-password',       { method: 'POST',  body: JSON.stringify({ email, code, password }) }),
 }

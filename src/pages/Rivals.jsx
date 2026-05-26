@@ -10,7 +10,7 @@
  */
 
 import { useState, useEffect } from 'react'
-import { X, Play, Tv } from 'lucide-react'
+import { X, Play, Tv, Plus, Check } from 'lucide-react'
 import { rivals, pulse, competitors as competitorsApi } from '../api'
 
 // ── localStorage helpers ──────────────────────────────────────────────────────
@@ -340,16 +340,18 @@ function DiscoverTab({
           <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray)', textTransform: 'uppercase', letterSpacing: '0.8px', marginTop: 4 }}>
             AI-matched · {visibleCompetitors.length} channels
           </div>
-          {visibleCompetitors.map(c => (
-            <CompetitorCard
-              key={c.id}
-              competitor={c}
-              isTracked={trackedIds.has(c.id)}
-              onAdd={() => onAdd({ channelId: c.id, name: c.name, handle: c.handle, avatar: c.thumbnail_url, subs: fmtSubs(c.subscriber_count) })}
-              onRemove={() => onRemove(c.id)}
-              onDismiss={() => onDismiss(c.id)}
-            />
-          ))}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 10 }}>
+            {visibleCompetitors.map(c => (
+              <CompetitorCard
+                key={c.id}
+                competitor={c}
+                isTracked={trackedIds.has(c.id)}
+                onAdd={() => onAdd({ channelId: c.id, name: c.name, handle: c.handle, avatar: c.thumbnail_url, subs: fmtSubs(c.subscriber_count) })}
+                onRemove={() => onRemove(c.id)}
+                onDismiss={() => onDismiss(c.id)}
+              />
+            ))}
+          </div>
         </>
       )}
 
@@ -359,119 +361,86 @@ function DiscoverTab({
           <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray)', textTransform: 'uppercase', letterSpacing: '0.8px', marginTop: hasCompetitors ? 8 : 4 }}>
             Suggested · {channels.length} channels
           </div>
-          {channels.map(ch => (
-            <DiscoverCard
-              key={ch.channelId}
-              channel={ch}
-              isTracked={trackedIds.has(ch.channelId)}
-              onAdd={onAdd}
-              onRemove={onRemove}
-              onDismiss={onDismiss}
-            />
-          ))}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 10 }}>
+            {channels.map(ch => (
+              <DiscoverCard
+                key={ch.channelId}
+                channel={ch}
+                isTracked={trackedIds.has(ch.channelId)}
+                onAdd={onAdd}
+                onRemove={onRemove}
+                onDismiss={onDismiss}
+              />
+            ))}
+          </div>
         </>
       )}
     </div>
   )
 }
 
-function CompetitorCard({ competitor: c, isTracked, onAdd, onRemove, onDismiss }) {
-  const pct = Math.round((c.score ?? 0) * 100)
+function CompetitorRow({ name, src, isTracked, onAdd, onRemove, onDismiss }) {
   return (
     <div style={{
-      background: 'var(--surface)', borderRadius: 'var(--radius)',
-      padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 10,
+      background: 'var(--surface)', borderRadius: 'var(--radius-sm)',
+      padding: '8px 10px', display: 'flex', alignItems: 'center', gap: 10,
     }}>
-      {/* Top row */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-        <Avatar name={c.name} src={c.thumbnail_url} size={44} />
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontWeight: 700, fontSize: 14, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            {c.name}
-          </div>
-          <div style={{ fontSize: 12, color: 'var(--gray)', marginTop: 2 }}>
-            {c.subscriber_count ? `${fmtSubs(c.subscriber_count)} subs` : ''}
-            {c.handle ? ` · ${c.handle}` : ''}
-          </div>
-        </div>
-        <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--secondary)', flexShrink: 0 }}>
-          {pct}%
-        </div>
+      <Avatar name={name} src={src} size={32} />
+      <div style={{ flex: 1, minWidth: 0, fontWeight: 600, fontSize: 14, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+        {name}
       </div>
-
-      {/* Match bar */}
-      <div style={{ height: 3, background: 'var(--surface2)', borderRadius: 2, overflow: 'hidden' }}>
-        <div style={{ height: '100%', width: `${pct}%`, background: 'linear-gradient(90deg, var(--primary), var(--secondary))', borderRadius: 2 }} />
-      </div>
-
-      {/* AI reason */}
-      {c.reason && (
-        <div style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.5, borderLeft: '2px solid var(--primary)', paddingLeft: 8 }}>
-          {c.reason}
-        </div>
-      )}
-
-      {/* Actions */}
-      <div style={{ display: 'flex', gap: 8 }}>
-        <button
-          onClick={() => isTracked ? onRemove() : onAdd()}
-          style={{
-            flex: 2, padding: '10px 8px', borderRadius: 'var(--radius-sm)',
-            fontWeight: 700, fontSize: 13,
-            background: isTracked ? 'var(--surface2)' : 'var(--primary)',
-            color:      isTracked ? 'var(--gray)'     : '#fff',
-          }}
-        >
-          {isTracked ? '✓ Tracking' : '+ Track'}
-        </button>
-        <button
-          onClick={onDismiss}
-          style={{ flex: 1, padding: '10px 8px', borderRadius: 'var(--radius-sm)', fontWeight: 600, fontSize: 13, background: 'var(--surface2)', color: 'var(--gray)' }}
-        >
-          Dismiss
-        </button>
-      </div>
+      <button
+        onClick={() => isTracked ? onRemove() : onAdd()}
+        aria-label={isTracked ? 'Tracking' : 'Track'}
+        style={{
+          width: 32, height: 32, borderRadius: 'var(--radius-sm)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: isTracked ? 'var(--surface2)' : 'var(--primary)',
+          color:      isTracked ? 'var(--gray)'     : '#fff',
+          flexShrink: 0,
+        }}
+      >
+        {isTracked ? <Check size={16} /> : <Plus size={16} />}
+      </button>
+      <button
+        onClick={onDismiss}
+        aria-label="Dismiss"
+        style={{
+          width: 32, height: 32, borderRadius: 'var(--radius-sm)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: 'var(--surface2)', color: 'var(--gray)',
+          flexShrink: 0,
+        }}
+      >
+        <X size={16} />
+      </button>
     </div>
+  )
+}
+
+function CompetitorCard({ competitor: c, isTracked, onAdd, onRemove, onDismiss }) {
+  return (
+    <CompetitorRow
+      name={c.name}
+      src={c.thumbnail_url}
+      isTracked={isTracked}
+      onAdd={onAdd}
+      onRemove={onRemove}
+      onDismiss={onDismiss}
+    />
   )
 }
 
 function DiscoverCard({ channel: ch, isTracked, onAdd, onRemove, onDismiss }) {
   return (
-    <div style={{
-      background: 'var(--surface)', borderRadius: 'var(--radius)',
-      padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 12,
-    }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-        <Avatar name={ch.name} src={ch.avatar} size={44} />
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontWeight: 700, fontSize: 14, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            {ch.name}
-          </div>
-          <div style={{ fontSize: 12, color: 'var(--gray)', marginTop: 2 }}>
-            {ch.subs} subs · Similar channel in your niche
-          </div>
-        </div>
-      </div>
-      <div style={{ display: 'flex', gap: 8 }}>
-        <button
-          onClick={() => isTracked ? onRemove(ch.channelId) : onAdd(ch)}
-          style={{
-            flex: 2, padding: '10px 8px', borderRadius: 'var(--radius-sm)',
-            fontWeight: 700, fontSize: 13,
-            background: isTracked ? 'var(--surface2)' : 'var(--primary)',
-            color:      isTracked ? 'var(--gray)'     : '#fff',
-          }}
-        >
-          {isTracked ? '✓ Tracking' : '+ Track'}
-        </button>
-        <button
-          onClick={() => onDismiss(ch.channelId)}
-          style={{ flex: 1, padding: '10px 8px', borderRadius: 'var(--radius-sm)', fontWeight: 600, fontSize: 13, background: 'var(--surface2)', color: 'var(--gray)' }}
-        >
-          Dismiss
-        </button>
-      </div>
-    </div>
+    <CompetitorRow
+      name={ch.name}
+      src={ch.avatar}
+      isTracked={isTracked}
+      onAdd={() => onAdd(ch)}
+      onRemove={() => onRemove(ch.channelId)}
+      onDismiss={() => onDismiss(ch.channelId)}
+    />
   )
 }
 

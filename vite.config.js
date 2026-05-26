@@ -7,7 +7,20 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      '/api': { target: 'https://vibeshype.com', changeOrigin: true, secure: true },
+      '/api': {
+        target: 'https://vibeshype.com',
+        changeOrigin: true,
+        secure: false,
+        configure: (proxy) => {
+          proxy.on('proxyReq', (proxyReq, req) => {
+            proxyReq.setHeader('Origin', 'https://vibeshype.com')
+            proxyReq.setHeader('Referer', 'https://vibeshype.com/')
+            console.log('[proxy →]', req.method, req.url)
+          })
+          proxy.on('proxyRes', (proxyRes, req) => console.log('[proxy ←]', proxyRes.statusCode, req.url))
+          proxy.on('error', (err) => console.error('[proxy error]', err.message))
+        },
+      },
     },
   },
   build: { outDir: 'dist' },

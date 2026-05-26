@@ -2,8 +2,8 @@ import { storage } from './storage'
 import { mockAuth, mockPulse } from './mockApi'
 
 const BASE       = import.meta.env.VITE_API_URL ?? ''
-const AUTH_BASE  = ''
-const PULSE_BASE = ''
+const AUTH_BASE  = BASE
+const PULSE_BASE = BASE
 const USE_MOCK   = import.meta.env.VITE_USE_MOCK === 'true'
 
 if (USE_MOCK) {

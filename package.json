@@ -9,7 +9,7 @@
     "preview": "vite preview",
     "server:dev": "cd server && npm run dev",
     "dev:all": "concurrently \"npm run server:dev\" \"vite\"",
-    "electron:dev": "concurrently \"vite\" \"wait-on http://localhost:5173 && electron .\"",
+    "electron:dev": "concurrently \"vite --port 5173 --strictPort\" \"wait-on http://localhost:5173 && electron .\"",
     "db:migrate": "cd server && npm run migrate",
     "electron:build": "vite build && electron-builder",
     "cap:sync": "cap sync",

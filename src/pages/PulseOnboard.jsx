@@ -456,35 +456,38 @@ function StepPeers({ peers, selected, onToggle, onAddCustom, onConfirm, onBack, 
     setCustomUrl('')
   }
 
+  const suggestionsBad = peers.length > 0 && peers.every(p => !p.avatar && (p.subs === null || Number(p.subs) < 1000))
+
   return (
     <>
       <button type="button" className="back-link" onClick={onBack} style={{ alignSelf: 'flex-start', marginBottom: 8 }}>
         <ArrowLeft size={14} /> Back
       </button>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', marginBottom: 8 }}>
-        <div className="onboard-heading" style={{ marginBottom: 0 }}>Choose your peer set</div>
+        <div className="onboard-heading" style={{ marginBottom: 0 }}>Add your competitors</div>
         <button
           type="button"
           onClick={onRefresh}
           disabled={loading}
-          title="Refresh suggestions"
+          title="Refresh AI suggestions"
           style={{ background: 'none', border: 'none', cursor: loading ? 'not-allowed' : 'pointer', color: 'var(--muted)', padding: 4, opacity: loading ? 0.4 : 1 }}
         >
           <RefreshCw size={16} strokeWidth={1.75} className={loading ? 'spin' : ''} />
         </button>
       </div>
       <div className="onboard-sub">
-        These are channels in your niche. We'll monitor them daily to find songs that are breaking out before you post.
+        Paste a competitor's channel URL or @handle below. You can add as many as you like, or skip for now.
       </div>
 
       <div className="peer-add-row">
         <div className="input-wrap" style={{ flex: 1, marginBottom: 0 }}>
           <input
             type="url"
-            placeholder="Add a competitor (channel URL or @handle)"
+            placeholder="https://youtube.com/@competitor"
             value={customUrl}
             onChange={e => setCustomUrl(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && handleAdd()}
+            autoFocus
           />
           <span className="input-icon"><Tv size={15} strokeWidth={1.75} /></span>
         </div>
@@ -505,34 +508,42 @@ function StepPeers({ peers, selected, onToggle, onAddCustom, onConfirm, onBack, 
 
       <button
         className="btn-primary"
-        disabled={selected.size === 0 || loading}
+        disabled={loading}
         onClick={onConfirm}
       >
-        {loading ? 'Saving…' : `Lock in ${selected.size} peers →`}
+        {loading ? 'Saving…' : selected.size > 0 ? `Continue with ${selected.size} competitor${selected.size !== 1 ? 's' : ''} →` : 'Skip for now →'}
       </button>
 
-      <div className="peer-count-note" style={{ marginTop: 16 }}>{selected.size} of {peers.length} selected</div>
-
-      <div className="peer-list">
-        {peers.map(peer => (
-          <div
-            key={peer.channelId}
-            className={`peer-item${selected.has(peer.channelId) ? ' selected' : ''}`}
-            onClick={() => onToggle(peer.channelId)}
-          >
-            <div className="peer-avatar">
-              {peer.avatar ? <img src={peer.avatar} alt="" /> : peer.name[0]}
-            </div>
-            <div className="peer-info">
-              <div className="peer-name">{peer.name}</div>
-              <div className="peer-subs">{peer.subs} subscribers</div>
-            </div>
-            <div className="peer-check">
-              {selected.has(peer.channelId) ? <Check size={16} strokeWidth={2.5} /> : ''}
+      {peers.length > 0 && (
+        <>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 20, marginBottom: 4 }}>
+            <div className="peer-count-note" style={{ margin: 0 }}>
+              {suggestionsBad ? 'AI suggestions (low quality — add your own above)' : `AI suggestions · ${selected.size} of ${peers.length} selected`}
             </div>
           </div>
-        ))}
-      </div>
+          <div className="peer-list">
+            {peers.map(peer => (
+              <div
+                key={peer.channelId}
+                className={`peer-item${selected.has(peer.channelId) ? ' selected' : ''}`}
+                onClick={() => onToggle(peer.channelId)}
+                style={suggestionsBad ? { opacity: 0.5 } : {}}
+              >
+                <div className="peer-avatar">
+                  {peer.avatar ? <img src={peer.avatar} alt="" /> : peer.name[0]}
+                </div>
+                <div className="peer-info">
+                  <div className="peer-name">{peer.name}</div>
+                  <div className="peer-subs">{peer.subs} subscribers</div>
+                </div>
+                <div className="peer-check">
+                  {selected.has(peer.channelId) ? <Check size={16} strokeWidth={2.5} /> : ''}
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
     </>
   )
 }

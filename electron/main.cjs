@@ -1,4 +1,4 @@
-const { app, BrowserWindow, shell, nativeTheme } = require('electron')
+const { app, BrowserWindow, shell, nativeTheme, session } = require('electron')
 const path = require('path')
 
 const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged
@@ -22,7 +22,7 @@ function createWindow() {
   })
 
   if (isDev) {
-    win.loadURL('http://localhost:5173')
+    win.loadURL(process.env.ELECTRON_START_URL || 'http://localhost:5173')
     win.webContents.openDevTools({ mode: 'detach' })
   } else {
     win.loadFile(path.join(__dirname, '../dist/index.html'))
@@ -35,6 +35,14 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+    const headers = { ...details.responseHeaders }
+    headers['access-control-allow-origin'] = ['*']
+    headers['access-control-allow-headers'] = ['*']
+    headers['access-control-allow-methods'] = ['GET, POST, PUT, PATCH, DELETE, OPTIONS']
+    callback({ responseHeaders: headers })
+  })
+
   createWindow()
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()

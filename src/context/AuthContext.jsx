@@ -43,8 +43,8 @@ export function AuthProvider({ children }) {
   }
 
   // register no longer returns a token — server sends verification email instead
-  async function register(email, password, emailOptIn, username) {
-    await auth.register(email, password, emailOptIn, username)
+  async function register(email, password, name) {
+    await auth.register(email, password, name)
   }
 
   async function logout() {

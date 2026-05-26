@@ -10,6 +10,7 @@
  */
 
 import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { X, Play, Tv, Plus, Check } from 'lucide-react'
 import { rivals, pulse, competitors as competitorsApi } from '../api'
 
@@ -32,7 +33,7 @@ function saveJSON(key, val) {
 // ── Main component ────────────────────────────────────────────────────────────
 
 export default function Rivals() {
-  const [tab, setTab] = useState(0) // 0=tracking 1=discover 2=activity
+  const [tab, setTab] = useState(0) // 0=discover 1=activity
 
   const [tracked,   setTracked]   = useState(() => loadJSON(KEY_TRACKED))
   const [dismissed, setDismissed] = useState(() => new Set(loadJSON(KEY_DISMISSED)))
@@ -85,7 +86,7 @@ export default function Rivals() {
 
   // Fetch activity whenever the Activity tab is opened and tracked list is non-empty
   useEffect(() => {
-    if (tab !== 2) return
+    if (tab !== 1) return
     if (!tracked.length) { setActivity([]); return }
 
     setActivityLoading(true)
@@ -99,7 +100,7 @@ export default function Rivals() {
 
   // When Activity tab is viewed: clear badge and mark all visible as seen
   useEffect(() => {
-    if (tab !== 2 || !activity) return
+    if (tab !== 1 || !activity) return
     saveJSON(KEY_BADGE, 0)
     const next = new Set(seen)
     activity.forEach(v => next.add(v.videoId))
@@ -243,6 +244,7 @@ function DiscoverTab({
   trackedIds, dismissed, onAdd, onDismiss, onRemove,
   channelIdLoading, channelIdMissing, onChannelIdResolved,
 }) {
+  const navigate = useNavigate()
   const [manualUrl,     setManualUrl]     = useState('')
   const [manualLoading, setManualLoading] = useState(false)
   const [manualError,   setManualError]   = useState(null)
@@ -254,14 +256,35 @@ function DiscoverTab({
     setManualError(null)
     try {
       const data = await pulse.onboard(val)
-      const id = data?.profile?.channelId
-      if (!id) throw new Error('No channel ID returned')
-      onChannelIdResolved(id)
+
+      let channelId = data?.profile?.channelId
+
+      if (!channelId && data?.analysisId) {
+        // Two-phase flow: poll until analysis completes
+        const result = await pollUntilComplete(data.analysisId)
+        channelId = result?.profile?.channelId
+      }
+
+      if (!channelId) throw new Error('No channel ID returned')
+      onChannelIdResolved(channelId)
     } catch (err) {
       setManualError('Could not resolve channel. Check the URL and try again.')
     } finally {
       setManualLoading(false)
     }
+  }
+
+  function pollUntilComplete(id, timeoutMs = 90_000) {
+    return new Promise((resolve, reject) => {
+      const deadline = setTimeout(() => { clearInterval(iv); reject(new Error('Timed out')) }, timeoutMs)
+      const iv = setInterval(async () => {
+        try {
+          const data = await pulse.onboardStatus(id)
+          if (data.status === 'complete') { clearInterval(iv); clearTimeout(deadline); resolve(data) }
+          else if (data.status === 'failed') { clearInterval(iv); clearTimeout(deadline); reject(new Error(data.error || 'Failed')) }
+        } catch { /* keep polling */ }
+      }, 3000)
+    })
   }
 
   // Still resolving channel ID from server
@@ -311,11 +334,22 @@ function DiscoverTab({
 
   if (!hasCompetitors && !hasSuggested && competitors !== null) {
     return (
-      <EmptyState
-        emoji="✅"
-        title="You're all caught up"
-        body="No suggestions right now. Re-run onboarding to refresh recommendations."
-      />
+      <div style={{ margin: '52px 20px', textAlign: 'center', color: 'var(--gray)' }}>
+        <div style={{ fontSize: 36, marginBottom: 12 }}>✅</div>
+        <div style={{ fontWeight: 700, color: 'var(--light)', fontSize: 15, marginBottom: 6 }}>
+          You're all caught up
+        </div>
+        <div style={{ fontSize: 13, lineHeight: 1.6, marginBottom: 20 }}>
+          No suggestions right now. Re-run onboarding to refresh recommendations.
+        </div>
+        <button
+          className="btn-primary"
+          style={{ maxWidth: 260, margin: '0 auto' }}
+          onClick={() => navigate('/pulse/onboard')}
+        >
+          Re-run onboarding
+        </button>
+      </div>
     )
   }
 

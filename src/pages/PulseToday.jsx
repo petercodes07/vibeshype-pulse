@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import PickCard from '../components/PickCard'
 import { pulse } from '../api'
-import { Search } from 'lucide-react'
+import { Search, RefreshCw } from 'lucide-react'
 
 const MOCK_PICKS = [
   {
@@ -60,13 +60,32 @@ const MOCK_PICKS = [
 export default function PulseToday() {
   const [picks, setPicks] = useState(null)
   const [showMore, setShowMore] = useState(false)
-  const [error, setError] = useState(null)
+  const [refreshing, setRefreshing] = useState(false)
+  const pollRef = useRef(null)
+
+  const loadPicks = useCallback(async (showSpinner = false) => {
+    if (showSpinner) setRefreshing(true)
+    try {
+      const data = await pulse.today()
+      const p = data.picks ?? []
+      setPicks(p)
+      if (p.length > 0 && pollRef.current) {
+        clearInterval(pollRef.current)
+        pollRef.current = null
+      }
+    } catch {
+      // keep whatever was shown before on error
+    } finally {
+      if (showSpinner) setRefreshing(false)
+    }
+  }, [])
 
   useEffect(() => {
-    pulse.today()
-      .then(data => setPicks(data.picks ?? []))
-      .catch(() => setPicks(MOCK_PICKS))
-  }, [])
+    loadPicks()
+    // poll every 60s while picks are empty
+    pollRef.current = setInterval(() => loadPicks(), 60_000)
+    return () => { if (pollRef.current) clearInterval(pollRef.current) }
+  }, [loadPicks])
 
   function handleAction(id, action) {
     pulse.act(id, action).catch(() => {})
@@ -79,13 +98,25 @@ export default function PulseToday() {
   return (
     <div className="screen">
       <div className="today-header">
-        <div className="today-date">{today}</div>
-        <div className="today-title">Today's Picks</div>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div>
+            <div className="today-date">{today}</div>
+            <div className="today-title">Today's Picks</div>
+          </div>
+          <button
+            onClick={() => loadPicks(true)}
+            disabled={refreshing || picks === null}
+            style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', padding: 8, opacity: refreshing ? 0.4 : 1 }}
+            title="Refresh picks"
+          >
+            <RefreshCw size={16} strokeWidth={1.75} className={refreshing ? 'spin' : ''} />
+          </button>
+        </div>
         <div className="today-sub">
           {picks === null
             ? 'Loading your picks…'
             : mainPicks.length === 0
-            ? 'No picks today — check back later.'
+            ? 'Generating your picks — checking back every minute…'
             : `${mainPicks.length} song${mainPicks.length > 1 ? 's' : ''} trending in your niche`}
         </div>
       </div>
@@ -97,9 +128,17 @@ export default function PulseToday() {
         </div>
       ) : mainPicks.length === 0 ? (
         <div className="picks-empty">
-          <div className="picks-empty-icon"><Search size={40} strokeWidth={1.25} /></div>
-          <div className="picks-empty-title">Nothing cleared the bar today</div>
-          <p className="text-muted">We'd rather show you 0 great picks than 5 mediocre ones. Check back tomorrow.</p>
+          <div className="picks-empty-icon"><div className="spinner" style={{ width: 36, height: 36, borderWidth: 3 }} /></div>
+          <div className="picks-empty-title">Generating your picks…</div>
+          <p className="text-muted">Hang tight — we're analysing your peer channels right now. This page refreshes automatically.</p>
+          <button
+            className="btn-primary"
+            style={{ marginTop: 16, maxWidth: 220 }}
+            onClick={() => loadPicks(true)}
+            disabled={refreshing}
+          >
+            {refreshing ? 'Checking…' : 'Check now'}
+          </button>
         </div>
       ) : (
         mainPicks.map((pick, i) => (

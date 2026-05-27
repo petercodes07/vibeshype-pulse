@@ -10,7 +10,6 @@
  */
 
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { X, Play, Tv, Plus, Check } from 'lucide-react'
 import { rivals, pulse, competitors as competitorsApi } from '../api'
 
@@ -28,6 +27,116 @@ function loadJSON(key, fallback = []) {
 }
 function saveJSON(key, val) {
   localStorage.setItem(key, JSON.stringify(val))
+}
+
+// ── YouTube RSS fallback ──────────────────────────────────────────────────────
+
+async function resolveToUCId(ch) {
+  if (ch.channelId?.startsWith('UC')) return ch.channelId
+  if (!ch.channelId?.startsWith('custom_')) return null
+
+  const url = ch.channelId.slice('custom_'.length)
+  const cacheKey = `yt_cid:${url}`
+  const cached = localStorage.getItem(cacheKey)
+  if (cached) { console.error('[rss] cache hit', url, '→', cached); return cached }
+
+  console.error('[rss] resolving channel ID for', url)
+
+  // Approach 1 — fetch YouTube channel page variants
+  const patterns = [
+    /feeds\/videos\.xml\?channel_id=(UC[\w-]{22})/,
+    /"channelId":"(UC[\w-]{22})"/,
+    /"externalId":"(UC[\w-]{22})"/,
+    /\/channel\/(UC[\w-]{22})/,
+  ]
+  for (const pageUrl of [url, url + '/videos', url + '/about']) {
+    try {
+      const res = await fetch(pageUrl, { signal: AbortSignal.timeout(10000) })
+      if (!res.ok) { console.error('[rss] page', pageUrl, 'returned', res.status); continue }
+      const html = await res.text()
+      console.error('[rss] fetched', pageUrl, '— length:', html.length)
+      for (const pat of patterns) {
+        const m = html.match(pat)
+        if (m) {
+          console.error('[rss] resolved via page', pageUrl, '→', m[1])
+          localStorage.setItem(cacheKey, m[1])
+          return m[1]
+        }
+      }
+      console.error('[rss] no channel ID in page — excerpt:', html.slice(0, 200))
+    } catch (e) {
+      console.error('[rss] page fetch error for', pageUrl, ':', e.message)
+    }
+  }
+
+  // Approach 2 — Piped open-source YouTube API (no key needed)
+  try {
+    const handle = url.split('@').pop()?.split(/[/?#]/)[0]
+    if (handle) {
+      console.error('[rss] trying Piped API for handle:', handle)
+      const res = await fetch(`https://pipedapi.kavin.rocks/channel/@${handle}`, { signal: AbortSignal.timeout(8000) })
+      if (res.ok) {
+        const data = await res.json()
+        const id = (data?.id ?? '').replace(/^\/channel\//, '')
+        if (id.startsWith('UC')) {
+          console.error('[rss] Piped resolved', handle, '→', id)
+          localStorage.setItem(cacheKey, id)
+          return id
+        }
+        console.error('[rss] Piped unexpected:', JSON.stringify(data).slice(0, 150))
+      } else {
+        console.error('[rss] Piped returned', res.status)
+      }
+    }
+  } catch (e) {
+    console.error('[rss] Piped API error:', e.message)
+  }
+
+  console.error('[rss] could not resolve channel ID for', url)
+  return null
+}
+
+async function fetchYouTubeRSS(trackedChannels) {
+  console.log('[rss] starting for', trackedChannels.length, 'channels')
+  const resolved = await Promise.all(
+    trackedChannels.map(async ch => ({ ...ch, resolvedId: await resolveToUCId(ch) }))
+  )
+  const valid = resolved.filter(ch => ch.resolvedId)
+  console.log('[rss] resolved IDs:', valid.map(c => c.resolvedId))
+  if (!valid.length) return []
+
+  const results = await Promise.allSettled(
+    valid.map(async ch => {
+      const feedUrl = `https://www.youtube.com/feeds/videos.xml?channel_id=${ch.resolvedId}`
+      console.log('[rss] fetching feed', feedUrl)
+      const res = await fetch(feedUrl, { signal: AbortSignal.timeout(8000) })
+      if (!res.ok) { console.warn('[rss] feed error', res.status); return [] }
+      const text = await res.text()
+      const doc = new DOMParser().parseFromString(text, 'application/xml')
+      const entries = [...doc.querySelectorAll('entry')]
+      console.log('[rss]', ch.name, entries.length, 'entries')
+      return entries.slice(0, 8).map(e => {
+        const link = e.querySelector('link')?.getAttribute('href') ?? ''
+        const videoId = link.match(/[?&]v=([^&]+)/)?.[1]
+          ?? e.querySelector('id')?.textContent?.split(':').pop() ?? ''
+        return {
+          videoId,
+          title:       e.querySelector('title')?.textContent ?? '',
+          publishedAt: e.querySelector('published')?.textContent ?? '',
+          thumbnail:   videoId ? `https://i.ytimg.com/vi/${videoId}/mqdefault.jpg` : null,
+          channelName: ch.name,
+          channelId:   ch.resolvedId,
+        }
+      }).filter(v => v.videoId)
+    })
+  )
+
+  const videos = results
+    .filter(r => r.status === 'fulfilled')
+    .flatMap(r => r.value)
+    .sort((a, b) => new Date(b.publishedAt) - new Date(a.publishedAt))
+  console.log('[rss] total videos:', videos.length)
+  return videos
 }
 
 // ── Main component ────────────────────────────────────────────────────────────
@@ -50,9 +159,14 @@ export default function Rivals() {
   const [competitorsError, setCompetitorsError] = useState(null)
   const [competitorsFetched, setCompetitorsFetched] = useState(false)
 
-  const [activity,      setActivity]      = useState(null) // null = not yet loaded
-  const [activityError, setActivityError] = useState(null)
+  const [activity,        setActivity]        = useState(null) // null = not yet loaded
+  const [activityError,   setActivityError]   = useState(null)
   const [activityLoading, setActivityLoading] = useState(false)
+  const [activityRefresh, setActivityRefresh] = useState(0) // bump to retry
+
+  // In-app modals
+  const [activeVideo,   setActiveVideo]   = useState(null) // { videoId, title, channelName }
+  const [activeChannel, setActiveChannel] = useState(null) // tracked channel object
 
   // On mount: if we don't have a channelId, ask the server for it
   useEffect(() => {
@@ -86,21 +200,42 @@ export default function Rivals() {
 
   // Fetch activity whenever the Activity tab is opened and tracked list is non-empty
   useEffect(() => {
-    if (tab !== 1) return
+    if (tab !== 2) return
     if (!tracked.length) { setActivity([]); return }
 
-    setActivityLoading(true)
-    setActivityError(null)
-    const ids = tracked.map(t => t.channelId).join(',')
-    rivals.activity(ids)
-      .then(data => setActivity(data.videos ?? []))
-      .catch(err  => { setActivityError(err.message); setActivity([]) })
-      .finally(() => setActivityLoading(false))
-  }, [tab]) // intentionally only re-fetches when tab changes
+    let cancelled = false
+    async function load() {
+      setActivityLoading(true)
+      setActivityError(null)
+      try {
+        const ids = tracked.map(t => t.channelId).join(',')
+        const data = await rivals.activity(ids)
+        if (!cancelled) setActivity(data.videos ?? [])
+      } catch (err) {
+        if (cancelled) return
+        if (err.status === 404 || !err.status) {
+          try {
+            const videos = await fetchYouTubeRSS(tracked)
+            if (!cancelled) setActivity(videos)
+          } catch (e) {
+            console.error('[activity] RSS fallback failed', e)
+            if (!cancelled) setActivity([])
+          }
+        } else {
+          setActivityError(err.message)
+          setActivity([])
+        }
+      } finally {
+        if (!cancelled) setActivityLoading(false)
+      }
+    }
+    load()
+    return () => { cancelled = true }
+  }, [tab, activityRefresh]) // re-fetches when tab changes or user hits Retry
 
   // When Activity tab is viewed: clear badge and mark all visible as seen
   useEffect(() => {
-    if (tab !== 1 || !activity) return
+    if (tab !== 2 || !activity) return
     saveJSON(KEY_BADGE, 0)
     const next = new Set(seen)
     activity.forEach(v => next.add(v.videoId))
@@ -151,6 +286,7 @@ export default function Rivals() {
   // tab 0 = Discover, tab 1 = Activity
 
   const tabs = [
+    { label: tracked.length ? `Tracking (${tracked.length})` : 'Tracking' },
     { label: discover.length ? `Discover (${discover.length})` : 'Discover' },
     { label: 'Activity', badge: unread },
   ]
@@ -206,6 +342,13 @@ export default function Rivals() {
 
       {/* Tab panels */}
       {tab === 0 && (
+        <TrackingTab
+          tracked={tracked}
+          onRemove={removeTracked}
+          onChannelPlay={setActiveChannel}
+        />
+      )}
+      {tab === 1 && (
         <DiscoverTab
           channels={discover}
           competitors={competitors}
@@ -224,15 +367,92 @@ export default function Rivals() {
           }}
         />
       )}
-      {tab === 1 && (
+      {tab === 2 && (
         <ActivityTab
           activity={activity}
           loading={activityLoading}
           error={activityError}
           hasTracked={tracked.length > 0}
           seen={seen}
+          onRetry={() => { setActivity(null); setActivityRefresh(k => k + 1) }}
+          onPlayVideo={setActiveVideo}
         />
       )}
+
+      {/* In-app modals */}
+      {activeChannel && (
+        <ChannelModal
+          channel={activeChannel}
+          onClose={() => setActiveChannel(null)}
+          onPlay={v => { setActiveChannel(null); setActiveVideo(v) }}
+        />
+      )}
+      {activeVideo && (
+        <VideoModal
+          video={activeVideo}
+          onClose={() => setActiveVideo(null)}
+        />
+      )}
+    </div>
+  )
+}
+
+// ── Tracking tab ─────────────────────────────────────────────────────────────
+
+function TrackingTab({ tracked, onRemove, onChannelPlay }) {
+  if (!tracked.length) {
+    return (
+      <EmptyState
+        emoji="📡"
+        title="Not tracking anyone yet"
+        body="Go to Discover and add competitors — they'll appear here."
+      />
+    )
+  }
+
+  return (
+    <div style={{ padding: '0 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray)', textTransform: 'uppercase', letterSpacing: '0.8px', marginTop: 4 }}>
+        {tracked.length} channel{tracked.length !== 1 ? 's' : ''} tracked
+      </div>
+      {tracked.map(ch => (
+        <div key={ch.channelId} style={{
+          background: 'var(--surface)', borderRadius: 'var(--radius-sm)',
+          padding: '10px 12px', display: 'flex', alignItems: 'center', gap: 12,
+        }}>
+          <Avatar name={ch.name} src={ch.thumbnail_url} size={40} />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontWeight: 700, fontSize: 14, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              {ch.name}
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--gray)', marginTop: 1 }}>
+              {ch.subs ? `${ch.subs} subs` : ''}
+              {ch.handle ? ` · ${ch.handle}` : ''}
+            </div>
+          </div>
+          <button
+            onClick={() => onChannelPlay(ch)}
+            title="View recent videos"
+            style={{
+              width: 30, height: 30, borderRadius: 'var(--radius-sm)',
+              background: 'var(--surface2)', color: 'var(--gray)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+            }}
+          >
+            <Play size={14} />
+          </button>
+          <button
+            onClick={() => onRemove(ch.channelId)}
+            style={{
+              width: 30, height: 30, borderRadius: 'var(--radius-sm)',
+              background: 'var(--surface2)', color: 'var(--gray)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+            }}
+          >
+            <X size={14} />
+          </button>
+        </div>
+      ))}
     </div>
   )
 }
@@ -244,50 +464,83 @@ function DiscoverTab({
   trackedIds, dismissed, onAdd, onDismiss, onRemove,
   channelIdLoading, channelIdMissing, onChannelIdResolved,
 }) {
-  const navigate = useNavigate()
-  const [manualUrl,     setManualUrl]     = useState('')
-  const [manualLoading, setManualLoading] = useState(false)
-  const [manualError,   setManualError]   = useState(null)
+  // ── "Add competitor by URL" — always visible, no server call needed ──────────
+  const [addUrl,     setAddUrl]     = useState('')
+  const [addError,   setAddError]   = useState(null)
+  const [addSuccess, setAddSuccess] = useState('')
 
-  async function handleManualSubmit() {
-    const val = manualUrl.trim()
+  function handleAddByUrl() {
+    const val = addUrl.trim()
     if (!val) return
-    setManualLoading(true)
-    setManualError(null)
+    if (!val.includes('youtube.com') && !val.includes('youtu.be')) {
+      setAddError('Please enter a YouTube channel URL (youtube.com/…)')
+      return
+    }
+    // Normalise: ensure https and www
+    let url = val
+    if (!/^https?:\/\//i.test(url)) url = 'https://' + url
+    url = url.replace('://youtube.com', '://www.youtube.com')
+    // Extract a display name: @handle or last path segment
+    const handle = url.match(/@([\w.-]+)/)?.[1]
+      ?? url.split('/').filter(Boolean).pop()
+      ?? 'Channel'
+    onAdd({
+      channelId: `custom_${url}`,
+      name:      handle,
+      handle:    handle.startsWith('@') ? handle : `@${handle}`,
+      avatar:    null,
+      subs:      '',
+    })
+    setAddUrl('')
+    setAddError(null)
+    setAddSuccess(`@${handle} added to Tracking ✓`)
+    setTimeout(() => setAddSuccess(''), 3000)
+  }
+
+  // ── "Link your channel" — only for AI suggestions, uses pulse.onboard ────────
+  const [myChannelUrl,     setMyChannelUrl]     = useState('')
+  const [myChannelLoading, setMyChannelLoading] = useState(false)
+  const [myChannelError,   setMyChannelError]   = useState(null)
+
+  async function handleLinkChannel() {
+    const val = myChannelUrl.trim()
+    if (!val) return
+    setMyChannelLoading(true)
+    setMyChannelError(null)
     try {
       const data = await pulse.onboard(val)
-
-      let channelId = data?.profile?.channelId
-
-      if (!channelId && data?.analysisId) {
-        // Two-phase flow: poll until analysis completes
-        const result = await pollUntilComplete(data.analysisId)
-        channelId = result?.profile?.channelId
+      let id = data?.channel?.channelId ?? data?.profile?.channelId ?? null
+      if (!id && data?.analysisId) {
+        id = await pollForChannelId(data.analysisId)
       }
-
-      if (!channelId) throw new Error('No channel ID returned')
-      onChannelIdResolved(channelId)
-    } catch (err) {
-      setManualError('Could not resolve channel. Check the URL and try again.')
+      if (!id) throw new Error('No channel ID in response')
+      onChannelIdResolved(id)
+    } catch {
+      setMyChannelError('Could not find that channel. Check the URL and try again.')
     } finally {
-      setManualLoading(false)
+      setMyChannelLoading(false)
     }
   }
 
-  function pollUntilComplete(id, timeoutMs = 90_000) {
+  function pollForChannelId(analysisId, timeoutMs = 90_000) {
     return new Promise((resolve, reject) => {
       const deadline = setTimeout(() => { clearInterval(iv); reject(new Error('Timed out')) }, timeoutMs)
       const iv = setInterval(async () => {
         try {
-          const data = await pulse.onboardStatus(id)
-          if (data.status === 'complete') { clearInterval(iv); clearTimeout(deadline); resolve(data) }
-          else if (data.status === 'failed') { clearInterval(iv); clearTimeout(deadline); reject(new Error(data.error || 'Failed')) }
+          const data = await pulse.onboardStatus(analysisId)
+          if (data.status === 'complete') {
+            clearInterval(iv); clearTimeout(deadline)
+            resolve(data?.channel?.channelId ?? data?.profile?.channelId ?? null)
+          } else if (data.status === 'failed') {
+            clearInterval(iv); clearTimeout(deadline)
+            reject(new Error(data.error || 'Analysis failed'))
+          }
         } catch { /* keep polling */ }
       }, 3000)
     })
   }
 
-  // Still resolving channel ID from server
+  // ── Loading state ─────────────────────────────────────────────────────────────
   if (channelIdLoading) {
     return (
       <div className="loading-screen" style={{ height: 200 }}>
@@ -296,85 +549,101 @@ function DiscoverTab({
     )
   }
 
-  // Couldn't get channelId from localStorage or server — ask the user
-  if (channelIdMissing) {
-    return (
-      <div style={{ padding: '24px 16px', display: 'flex', flexDirection: 'column', gap: 12 }}>
-        <div style={{ fontWeight: 700, fontSize: 15 }}>Link your channel</div>
-        <div style={{ fontSize: 13, color: 'var(--muted)', lineHeight: 1.5 }}>
-          We need your YouTube channel URL to find AI-matched competitors.
-        </div>
-        <div className="input-wrap" style={{ marginBottom: 0 }}>
-          <input
-            type="url"
-            placeholder="https://youtube.com/@yourchannel"
-            value={manualUrl}
-            onChange={e => setManualUrl(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && handleManualSubmit()}
-          />
-          <span className="input-icon"><Tv size={15} strokeWidth={1.75} /></span>
-        </div>
-        {manualError && (
-          <div style={{ fontSize: 12, color: '#ff7070', lineHeight: 1.5 }}>{manualError}</div>
-        )}
-        <button
-          className="btn-primary"
-          disabled={!manualUrl.trim() || manualLoading}
-          onClick={handleManualSubmit}
-        >
-          {manualLoading ? 'Analysing…' : 'Find my competitors →'}
-        </button>
-      </div>
-    )
-  }
-
   const visibleCompetitors = (competitors ?? []).filter(c => !trackedIds.has(c.id) && !dismissed.has(c.id))
   const hasCompetitors = visibleCompetitors.length > 0
   const hasSuggested   = channels.length > 0
 
-  if (!hasCompetitors && !hasSuggested && competitors !== null) {
-    return (
-      <div style={{ margin: '52px 20px', textAlign: 'center', color: 'var(--gray)' }}>
-        <div style={{ fontSize: 36, marginBottom: 12 }}>✅</div>
-        <div style={{ fontWeight: 700, color: 'var(--light)', fontSize: 15, marginBottom: 6 }}>
-          You're all caught up
-        </div>
-        <div style={{ fontSize: 13, lineHeight: 1.6, marginBottom: 20 }}>
-          No suggestions right now. Re-run onboarding to refresh recommendations.
-        </div>
-        <button
-          className="btn-primary"
-          style={{ maxWidth: 260, margin: '0 auto' }}
-          onClick={() => navigate('/pulse/onboard')}
-        >
-          Re-run onboarding
-        </button>
-      </div>
-    )
-  }
-
   return (
-    <div style={{ padding: '0 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+    <div style={{ padding: '0 16px', display: 'flex', flexDirection: 'column', gap: 14 }}>
 
-      {/* AI-scored competitors loading */}
-      {competitors === null && !competitorsError && (
-        <div className="loading-screen" style={{ height: 120 }}>
+      {/* ── ADD COMPETITOR BY URL (always shown) ── */}
+      <div style={{
+        background: 'var(--surface)', borderRadius: 'var(--radius-sm)',
+        padding: '12px 14px',
+      }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray)', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: 8 }}>
+          Track a competitor
+        </div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <div className="input-wrap" style={{ flex: 1, marginBottom: 0 }}>
+            <input
+              type="url"
+              placeholder="https://youtube.com/@competitorhandle"
+              value={addUrl}
+              onChange={e => { setAddUrl(e.target.value); setAddError(null); setAddSuccess('') }}
+              onKeyDown={e => e.key === 'Enter' && handleAddByUrl()}
+            />
+            <span className="input-icon"><Tv size={15} strokeWidth={1.75} /></span>
+          </div>
+          <button
+            className="btn-primary"
+            onClick={handleAddByUrl}
+            disabled={!addUrl.trim()}
+            style={{ flexShrink: 0, padding: '0 14px', height: 44, fontSize: 13 }}
+          >
+            Track
+          </button>
+        </div>
+        {addError   && <div style={{ fontSize: 12, color: '#ff7070',      marginTop: 6 }}>{addError}</div>}
+        {addSuccess && <div style={{ fontSize: 12, color: 'var(--secondary)', marginTop: 6 }}>{addSuccess}</div>}
+      </div>
+
+      {/* ── LINK YOUR OWN CHANNEL for AI suggestions (only when missing) ── */}
+      {channelIdMissing && (
+        <div style={{
+          background: 'rgba(99,102,241,0.08)',
+          border: '1px solid rgba(99,102,241,0.25)',
+          borderRadius: 'var(--radius-sm)',
+          padding: '12px 14px',
+          display: 'flex', flexDirection: 'column', gap: 10,
+        }}>
+          <div style={{ fontSize: 13, fontWeight: 700 }}>Link YOUR channel for AI suggestions</div>
+          <div style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.5 }}>
+            This is <strong>your own</strong> YouTube channel — not a competitor's. We'll analyse it once to find matching competitors automatically.
+          </div>
+          <div className="input-wrap" style={{ marginBottom: 0 }}>
+            <input
+              type="url"
+              placeholder="https://youtube.com/@yourchannel"
+              value={myChannelUrl}
+              onChange={e => { setMyChannelUrl(e.target.value); setMyChannelError(null) }}
+              onKeyDown={e => e.key === 'Enter' && handleLinkChannel()}
+            />
+            <span className="input-icon"><Tv size={15} strokeWidth={1.75} /></span>
+          </div>
+          {myChannelError && (
+            <div style={{ fontSize: 12, color: '#ff7070' }}>{myChannelError}</div>
+          )}
+          <button
+            className="btn-primary"
+            disabled={!myChannelUrl.trim() || myChannelLoading}
+            onClick={handleLinkChannel}
+            style={{ marginTop: 0 }}
+          >
+            {myChannelLoading ? 'Analysing…' : 'Find my competitors →'}
+          </button>
+        </div>
+      )}
+
+      {/* ── AI-scored competitors loading ── */}
+      {!channelIdMissing && competitors === null && !competitorsError && (
+        <div className="loading-screen" style={{ height: 100 }}>
           <div className="spinner" />
         </div>
       )}
 
-      {competitorsError && (
-        <div style={{ fontSize: 12, color: 'var(--gray)', textAlign: 'center', padding: '12px 0' }}>
+      {!channelIdMissing && competitorsError && (
+        <div style={{ fontSize: 12, color: 'var(--gray)', textAlign: 'center', padding: '8px 0' }}>
           Could not load AI competitors
         </div>
       )}
 
       {hasCompetitors && (
         <>
-          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray)', textTransform: 'uppercase', letterSpacing: '0.8px', marginTop: 4 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray)', textTransform: 'uppercase', letterSpacing: '0.8px' }}>
             AI-matched · {visibleCompetitors.length} channels
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 10 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {visibleCompetitors.map(c => (
               <CompetitorCard
                 key={c.id}
@@ -389,13 +658,12 @@ function DiscoverTab({
         </>
       )}
 
-      {/* Onboarding suggestions fallback */}
       {hasSuggested && (
         <>
-          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray)', textTransform: 'uppercase', letterSpacing: '0.8px', marginTop: hasCompetitors ? 8 : 4 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray)', textTransform: 'uppercase', letterSpacing: '0.8px', marginTop: hasCompetitors ? 4 : 0 }}>
             Suggested · {channels.length} channels
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 10 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {channels.map(ch => (
               <DiscoverCard
                 key={ch.channelId}
@@ -408,6 +676,12 @@ function DiscoverTab({
             ))}
           </div>
         </>
+      )}
+
+      {!channelIdMissing && !hasCompetitors && !hasSuggested && competitors !== null && (
+        <div style={{ margin: '32px 0', textAlign: 'center', color: 'var(--gray)', fontSize: 13 }}>
+          No suggestions right now — add competitors above using a YouTube URL.
+        </div>
       )}
     </div>
   )
@@ -487,7 +761,7 @@ function fmtSubs(n) {
 
 // ── Activity tab ──────────────────────────────────────────────────────────────
 
-function ActivityTab({ activity, loading, error, hasTracked, seen }) {
+function ActivityTab({ activity, loading, error, hasTracked, seen, onRetry, onPlayVideo }) {
   if (!hasTracked) {
     return (
       <EmptyState
@@ -502,51 +776,57 @@ function ActivityTab({ activity, loading, error, hasTracked, seen }) {
     return (
       <div className="loading-screen" style={{ height: 300 }}>
         <div className="spinner" />
+        <span style={{ marginTop: 10, fontSize: 13, color: 'var(--muted)' }}>Fetching latest posts…</span>
       </div>
     )
   }
 
   if (error) {
     return (
-      <div style={{ margin: '40px 20px', textAlign: 'center', color: '#ff7070', fontSize: 13 }}>
-        Could not load activity — {error}
+      <div style={{ margin: '40px 20px', textAlign: 'center' }}>
+        <div style={{ color: '#ff7070', fontSize: 13, marginBottom: 14 }}>Could not load activity — {error}</div>
+        <button className="btn-primary" style={{ maxWidth: 180, margin: '0 auto' }} onClick={onRetry}>
+          Retry
+        </button>
       </div>
     )
   }
 
   if (!activity.length) {
     return (
-      <EmptyState
-        emoji="🔇"
-        title="No recent activity"
-        body="None of your tracked channels have posted recently."
-      />
+      <div style={{ margin: '52px 20px', textAlign: 'center', color: 'var(--gray)' }}>
+        <div style={{ fontSize: 36, marginBottom: 12 }}>🔇</div>
+        <div style={{ fontWeight: 700, color: 'var(--light)', fontSize: 15, marginBottom: 6 }}>No recent activity</div>
+        <div style={{ fontSize: 13, lineHeight: 1.6, marginBottom: 16 }}>
+          None of your tracked channels have posted recently, or their feeds could not be loaded.
+        </div>
+        <button className="btn-primary" style={{ maxWidth: 180, margin: '0 auto' }} onClick={onRetry}>
+          Retry
+        </button>
+      </div>
     )
   }
 
   return (
     <div style={{ padding: '0 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
       {activity.map(v => (
-        <ActivityCard key={v.videoId} video={v} isNew={!seen.has(v.videoId)} />
+        <ActivityCard key={v.videoId} video={v} isNew={!seen.has(v.videoId)} onPlay={onPlayVideo} />
       ))}
     </div>
   )
 }
 
-function ActivityCard({ video: v, isNew }) {
-  const ytUrl = `https://youtube.com/watch?v=${v.videoId}`
-
+function ActivityCard({ video: v, isNew, onPlay }) {
   return (
-    <a
-      href={ytUrl}
-      target="_blank"
-      rel="noreferrer"
+    <div
+      onClick={() => onPlay(v)}
       style={{
         background: 'var(--surface)',
         borderRadius: 'var(--radius)',
         padding: '12px 14px',
         display: 'flex',
         gap: 12,
+        cursor: 'pointer',
         alignItems: 'flex-start',
         borderLeft: isNew ? '3px solid var(--primary)' : '3px solid transparent',
         textDecoration: 'none',
@@ -590,7 +870,196 @@ function ActivityCard({ video: v, isNew }) {
           {timeAgo(v.publishedAt)}
         </div>
       </div>
-    </a>
+    </div>
+  )
+}
+
+// ── In-app video modal ────────────────────────────────────────────────────────
+
+function VideoModal({ video, onClose }) {
+  // Close on Escape key
+  useEffect(() => {
+    const handler = (e) => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [onClose])
+
+  return (
+    <div
+      style={{
+        position: 'fixed', inset: 0, zIndex: 1100,
+        background: 'rgba(0,0,0,0.88)',
+        display: 'flex', flexDirection: 'column',
+        alignItems: 'center', justifyContent: 'center',
+        padding: 20,
+      }}
+      onClick={onClose}
+    >
+      <div
+        style={{
+          width: '100%', maxWidth: 820,
+          background: 'var(--surface)',
+          borderRadius: 'var(--radius)',
+          overflow: 'hidden',
+        }}
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div style={{ padding: '12px 16px', display: 'flex', alignItems: 'flex-start', gap: 12, borderBottom: '1px solid var(--surface2)' }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--primary)', marginBottom: 3 }}>
+              {video.channelName}
+            </div>
+            <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--light)', lineHeight: 1.35 }}>
+              {video.title}
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            style={{
+              width: 28, height: 28, borderRadius: '50%',
+              background: 'var(--surface2)', color: 'var(--gray)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+            }}
+          >
+            <X size={14} />
+          </button>
+        </div>
+        {/* 16:9 embed */}
+        <div style={{ position: 'relative', paddingBottom: '56.25%', height: 0 }}>
+          <iframe
+            src={`https://www.youtube.com/embed/${video.videoId}?autoplay=1&rel=0`}
+            style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', border: 'none' }}
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+            allowFullScreen
+            title={video.title}
+          />
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Channel modal (recent uploads list) ───────────────────────────────────────
+
+function ChannelModal({ channel, onClose, onPlay }) {
+  const [videos,  setVideos]  = useState(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    const handler = (e) => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [onClose])
+
+  useEffect(() => {
+    let cancelled = false
+    async function load() {
+      try {
+        const vids = await fetchYouTubeRSS([channel])
+        if (!cancelled) setVideos(vids)
+      } catch {
+        if (!cancelled) setVideos([])
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+    load()
+    return () => { cancelled = true }
+  }, [channel.channelId]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  return (
+    <div
+      style={{
+        position: 'fixed', inset: 0, zIndex: 1000,
+        background: 'rgba(0,0,0,0.85)',
+        display: 'flex', flexDirection: 'column',
+        alignItems: 'center', justifyContent: 'center',
+        padding: 20,
+      }}
+      onClick={onClose}
+    >
+      <div
+        style={{
+          width: '100%', maxWidth: 580,
+          maxHeight: '80vh',
+          background: 'var(--surface)',
+          borderRadius: 'var(--radius)',
+          overflow: 'hidden',
+          display: 'flex', flexDirection: 'column',
+        }}
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div style={{
+          padding: '14px 16px',
+          display: 'flex', alignItems: 'center', gap: 12,
+          borderBottom: '1px solid var(--surface2)',
+          flexShrink: 0,
+        }}>
+          <Avatar name={channel.name} src={channel.thumbnail_url} size={36} />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontWeight: 700, fontSize: 15, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              {channel.name}
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--muted)' }}>Recent uploads</div>
+          </div>
+          <button
+            onClick={onClose}
+            style={{
+              width: 28, height: 28, borderRadius: '50%',
+              background: 'var(--surface2)', color: 'var(--gray)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+            }}
+          >
+            <X size={14} />
+          </button>
+        </div>
+
+        {/* Scrollable video list */}
+        <div style={{ overflowY: 'auto', flex: 1 }}>
+          {loading && (
+            <div className="loading-screen" style={{ height: 180 }}>
+              <div className="spinner" />
+            </div>
+          )}
+          {!loading && (!videos?.length) && (
+            <div style={{ padding: 32, textAlign: 'center', fontSize: 13, color: 'var(--muted)' }}>
+              No recent videos found
+            </div>
+          )}
+          {!loading && videos?.length > 0 && videos.map((v, i) => (
+            <button
+              key={v.videoId}
+              onClick={() => onPlay(v)}
+              style={{
+                width: '100%', display: 'flex', gap: 12,
+                padding: '10px 16px', alignItems: 'flex-start',
+                background: 'none', textAlign: 'left',
+                borderBottom: i < videos.length - 1 ? '1px solid var(--surface2)' : 'none',
+              }}
+            >
+              {v.thumbnail ? (
+                <img src={v.thumbnail} alt="" style={{ width: 88, height: 50, borderRadius: 5, objectFit: 'cover', flexShrink: 0 }} />
+              ) : (
+                <div style={{ width: 88, height: 50, borderRadius: 5, background: 'var(--surface2)', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Play size={14} color="var(--gray)" />
+                </div>
+              )}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{
+                  fontSize: 13, fontWeight: 600, color: 'var(--light)', lineHeight: 1.4,
+                  display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
+                }}>
+                  {v.title}
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--gray)', marginTop: 3 }}>{timeAgo(v.publishedAt)}</div>
+              </div>
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
   )
 }
 

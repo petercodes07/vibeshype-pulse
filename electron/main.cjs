@@ -3,6 +3,11 @@ const path = require('path')
 
 const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged
 
+// Strip "Electron" from the User-Agent so YouTube / Google don't serve bot-detection pages
+// instead of real HTML (which breaks channel-ID extraction from RSS pages).
+const CHROME_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
+app.userAgentFallback = CHROME_UA
+
 function createWindow() {
   nativeTheme.themeSource = 'dark'
 
@@ -35,6 +40,9 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  // Also set at session level so it applies to all fetch() calls from the renderer
+  session.defaultSession.setUserAgent(CHROME_UA)
+
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
     const headers = { ...details.responseHeaders }
     headers['access-control-allow-origin'] = ['*']

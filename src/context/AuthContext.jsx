@@ -50,7 +50,6 @@ export function AuthProvider({ children }) {
   async function logout() {
     auth.logout().catch(() => {})
     storage.remove('pulse_token')
-    storage.remove('pulse_onboarded')
     setUser(null)
   }
 

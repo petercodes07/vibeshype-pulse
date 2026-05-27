@@ -1,8 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './context/AuthContext'
-import { storage } from './storage'
 import AuthScreen from './pages/AuthScreen'
-import PulseOnboard from './pages/PulseOnboard'
 import Home from './pages/Home'
 import PulseToday from './pages/PulseToday'
 import PulsePeers from './pages/PulsePeers'
@@ -44,25 +42,23 @@ function Router() {
     )
   }
 
-  const onboarded = storage.get('pulse_onboarded') === 'true'
-
+  // Authenticated — go straight to the dashboard, no onboarding gate
   return (
     <div className="app">
-      {onboarded && <SideNav />}
+      <SideNav />
       <div className="app-main">
         <Routes>
-          <Route path="/" element={<Navigate to={onboarded ? '/pulse/home' : '/pulse/onboard'} replace />} />
-          <Route path="/pulse/onboard"  element={<PulseOnboard />} />
-          <Route path="/pulse/home"     element={onboarded ? <Home />         : <Navigate to="/pulse/onboard" replace />} />
-          <Route path="/pulse/today"    element={onboarded ? <PulseToday />   : <Navigate to="/pulse/onboard" replace />} />
-          <Route path="/pulse/peers"    element={onboarded ? <PulsePeers />   : <Navigate to="/pulse/onboard" replace />} />
-          <Route path="/pulse/competitors" element={onboarded ? <Rivals />       : <Navigate to="/pulse/onboard" replace />} />
-          <Route path="/pulse/history"  element={onboarded ? <PulseHistory /> : <Navigate to="/pulse/onboard" replace />} />
-          <Route path="/pulse/profile"  element={onboarded ? <Profile />      : <Navigate to="/pulse/onboard" replace />} />
-          <Route path="/pulse/settings" element={onboarded ? <Settings />     : <Navigate to="/pulse/onboard" replace />} />
-          <Route path="/connect"        element={<ConnectChannel />} />
-          <Route path="/competitors"    element={<Competitors />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
+          <Route path="/"                  element={<Navigate to="/pulse/home" replace />} />
+          <Route path="/pulse/home"        element={<Home />} />
+          <Route path="/pulse/today"       element={<PulseToday />} />
+          <Route path="/pulse/peers"       element={<PulsePeers />} />
+          <Route path="/pulse/competitors" element={<Rivals />} />
+          <Route path="/pulse/history"     element={<PulseHistory />} />
+          <Route path="/pulse/profile"     element={<Profile />} />
+          <Route path="/pulse/settings"    element={<Settings />} />
+          <Route path="/connect"           element={<ConnectChannel />} />
+          <Route path="/competitors"       element={<Competitors />} />
+          <Route path="*"                  element={<Navigate to="/" replace />} />
         </Routes>
       </div>
     </div>

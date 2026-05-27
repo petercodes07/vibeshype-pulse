@@ -14,7 +14,8 @@ function saveMyChannels(list) {
 }
 
 function initials(user) {
-  if (user?.username) return user.username[0].toUpperCase()
+  const display = user?.name ?? user?.username
+  if (display) return display[0].toUpperCase()
   if (user?.email) return user.email[0].toUpperCase()
   return '?'
 }
@@ -23,7 +24,7 @@ export default function Profile() {
   const { user } = useAuth()
 
   const [editingUsername, setEditingUsername] = useState(false)
-  const [usernameVal,     setUsernameVal]     = useState(user?.username ?? '')
+  const [usernameVal,     setUsernameVal]     = useState(user?.name ?? user?.username ?? '')
   const [usernameError,   setUsernameError]   = useState(null)
   const [saving,          setSaving]          = useState(false)
   const [saved,           setSaved]           = useState(false)
@@ -73,7 +74,7 @@ export default function Profile() {
     }
     setSaving(true)
     try {
-      await auth.updateMe({ username: usernameVal })
+      await auth.updateMe({ name: usernameVal })
       setEditingUsername(false)
       setSaved(true)
       setTimeout(() => setSaved(false), 2000)
@@ -87,7 +88,7 @@ export default function Profile() {
   }
 
   function cancelUsername() {
-    setUsernameVal(user?.username ?? '')
+    setUsernameVal(user?.name ?? user?.username ?? '')
     setUsernameError(null)
     setEditingUsername(false)
   }
@@ -196,7 +197,7 @@ export default function Profile() {
         </div>
         <div>
           <div style={{ fontSize: 20, fontWeight: 800, letterSpacing: '-0.4px' }}>
-            {user?.username ?? user?.email?.split('@')[0] ?? 'Your account'}
+            {user?.name ?? user?.username ?? user?.email?.split('@')[0] ?? 'Your account'}
           </div>
           <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 2 }}>{user?.email}</div>
         </div>
@@ -220,8 +221,8 @@ export default function Profile() {
               {usernameError && <div style={{ fontSize: 11, color: '#ff7070', marginTop: 3 }}>{usernameError}</div>}
             </div>
           ) : (
-            <span style={{ flex: 1, fontSize: 14, color: user?.username ? 'var(--light)' : 'var(--gray)' }}>
-              {user?.username ?? 'Not set'}
+            <span style={{ flex: 1, fontSize: 14, color: (user?.name ?? user?.username) ? 'var(--light)' : 'var(--gray)' }}>
+              {user?.name ?? user?.username ?? 'Not set'}
               {saved && <span style={{ fontSize: 11, color: 'var(--secondary)', marginLeft: 8 }}>Saved ✓</span>}
             </span>
           )}

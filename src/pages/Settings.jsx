@@ -17,7 +17,7 @@ export default function Settings() {
 
   function handleClearData() {
     setClearing(true)
-    const keep = ['pulse_token', 'pulse_onboarded']
+    const keep = ['pulse_token']
     Object.keys(localStorage)
       .filter(k => k.startsWith('pulse_') && !keep.includes(k))
       .forEach(k => localStorage.removeItem(k))

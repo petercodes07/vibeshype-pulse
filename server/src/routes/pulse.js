@@ -237,31 +237,61 @@ pulseRouter.get('/today', async (_req, res) => {
       titleMap.get(key).push(v)
     }
 
-    const picks = []
-    for (const [, videos] of titleMap) {
-      if (videos.length < 1) continue
-      const sorted = videos.sort((a, b) => b.viewCount - a.viewCount)
-      const top = sorted[0]
-      picks.push({
-        id:             top.videoId,
-        title:          top.title,
-        artist:         top.channelName,
-        cover:          top.thumbnail ?? null,
-        reason:         `${sorted.length} peer channel${sorted.length > 1 ? 's' : ''} posted this recently.`,
-        peerCount:      sorted.length,
-        viewsPerHour:   null,
-        chartRank:      null,
-        lyricsAvailable:false,
-        variant:        'original',
-        sources:        sorted.slice(0, 4).map(v => ({ name: v.channelName, views: v.viewCount, avatar: null })),
-      })
-    }
+    // Dedupe titles, cap to top 12 by peer count to bound YouTube quota
+    const candidates = [...titleMap.entries()]
+      .map(([key, videos]) => ({ key, videos: videos.sort((a, b) => b.viewCount - a.viewCount) }))
+      .sort((a, b) => b.videos.length - a.videos.length)
+      .slice(0, 20)
 
-    // Sort by peer count then by views
-    picks.sort((a, b) => b.peerCount - a.peerCount || (b.sources[0]?.views ?? 0) - (a.sources[0]?.views ?? 0))
+    // For each candidate, search YouTube for the same song uploaded in the last 7 days
+    // by anyone, and aggregate cross-channel usage + emerging views.
+    const enriched = await Promise.all(candidates.map(async ({ videos }) => {
+      const top = videos[0]
+      const query = normaliseTitle(top.title)
+      const usage = await searchSongUsageLast7Days(query, new Set(videos.map(v => v.videoId)))
+      return { videos, top, usage }
+    }))
+
+    const picks = enriched.map(({ videos, top, usage }) => {
+      const crossCount = usage.channelCount
+      const crossViews = usage.totalViews
+      const peerCount = videos.length
+      const reason = crossCount > 0
+        ? `${peerCount} peer${peerCount > 1 ? 's' : ''} posted this — ${crossCount} other channel${crossCount > 1 ? 's' : ''} uploaded the same song in the last 7 days (${formatViews(crossViews)} combined views).`
+        : `${peerCount} peer${peerCount > 1 ? 's' : ''} posted this recently.`
+
+      // Merge peer sources + outside sources (top by views)
+      const peerSources = videos.map(v => ({ name: v.channelName, views: v.viewCount, avatar: null }))
+      const outsideSources = usage.top.map(v => ({ name: v.channelName, views: v.viewCount, avatar: null }))
+      const sources = [...peerSources, ...outsideSources]
+        .sort((a, b) => b.views - a.views)
+        .slice(0, 5)
+
+      return {
+        id:              top.videoId,
+        title:           top.title,
+        artist:          top.channelName,
+        cover:           top.thumbnail ?? null,
+        reason,
+        peerCount,
+        crossChannelCount: crossCount,
+        crossChannelViews: crossViews,
+        viewsPerHour:    usage.viewsPerHour,
+        chartRank:       null,
+        lyricsAvailable: false,
+        variant:         'original',
+        sources,
+      }
+    })
+
+    // Rank: usage count first, then emerging views
+    picks.sort((a, b) =>
+      (b.crossChannelCount + b.peerCount) - (a.crossChannelCount + a.peerCount)
+      || b.crossChannelViews - a.crossChannelViews
+    )
 
     console.log(`[pulse/today] Returning ${picks.length} picks from ${store.peers.length} peers`)
-    res.json({ picks: picks.slice(0, 15) })
+    res.json({ picks: picks.slice(0, 25) })
   } catch (err) {
     console.error('[pulse/today] Error:', err.message)
     res.json({ picks: [] })
@@ -312,6 +342,64 @@ async function getRecentVideosForPicks(channelId, maxResults = 5) {
     console.warn(`[pulse/today] Failed to fetch videos for ${channelId}:`, err.message)
     return []
   }
+}
+
+// Search YouTube for other uploads of the same song in the last 7 days.
+// Returns channel count (distinct), total views, top uploads, and avg views/hour.
+async function searchSongUsageLast7Days(query, excludeVideoIds) {
+  if (!query) return { channelCount: 0, totalViews: 0, viewsPerHour: null, top: [] }
+  const publishedAfter = new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString()
+  try {
+    const search = await ytGet('search', {
+      part: 'snippet',
+      type: 'video',
+      q: query,
+      order: 'viewCount',
+      maxResults: 20,
+      publishedAfter,
+      videoCategoryId: '10',
+    })
+    const ids = (search.items ?? [])
+      .map(i => i.id?.videoId)
+      .filter(id => id && !excludeVideoIds.has(id))
+    if (!ids.length) return { channelCount: 0, totalViews: 0, viewsPerHour: null, top: [] }
+
+    const details = await ytGet('videos', {
+      part: 'snippet,statistics',
+      id: ids.slice(0, 20).join(','),
+    })
+
+    const videos = (details.items ?? []).map(v => ({
+      videoId:     v.id,
+      title:       v.snippet.title,
+      channelId:   v.snippet.channelId,
+      channelName: v.snippet.channelTitle,
+      publishedAt: v.snippet.publishedAt,
+      viewCount:   parseInt(v.statistics?.viewCount ?? '0', 10),
+    }))
+
+    const distinctChannels = new Set(videos.map(v => v.channelId))
+    const totalViews = videos.reduce((a, v) => a + v.viewCount, 0)
+    const now = Date.now()
+    const viewsPerHour = videos.length
+      ? Math.round(videos.reduce((a, v) => {
+          const hours = Math.max(1, (now - new Date(v.publishedAt).getTime()) / 3_600_000)
+          return a + v.viewCount / hours
+        }, 0))
+      : null
+    const top = videos.sort((a, b) => b.viewCount - a.viewCount).slice(0, 3)
+
+    return { channelCount: distinctChannels.size, totalViews, viewsPerHour, top }
+  } catch (err) {
+    console.warn(`[pulse/today] Song-usage search failed for "${query}":`, err.message)
+    return { channelCount: 0, totalViews: 0, viewsPerHour: null, top: [] }
+  }
+}
+
+function formatViews(n) {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
+  if (n >= 1_000) return `${(n / 1_000).toFixed(0)}K`
+  return String(n)
 }
 
 function normaliseTitle(title = '') {

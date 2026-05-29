@@ -69,6 +69,12 @@ export async function fetchYouTubeRSS(trackedChannels) {
         const link = e.querySelector('link')?.getAttribute('href') ?? ''
         const videoId = link.match(/[?&]v=([^&]+)/)?.[1]
           ?? e.querySelector('id')?.textContent?.split(':').pop() ?? ''
+
+        // YouTube RSS includes <media:statistics views="N"/> under the media namespace
+        const MEDIA_NS = 'http://search.yahoo.com/mrss/'
+        const statsEl  = e.getElementsByTagNameNS(MEDIA_NS, 'statistics')[0]
+        const views    = statsEl ? (parseInt(statsEl.getAttribute('views') || '0', 10) || null) : null
+
         return {
           videoId,
           title:       e.querySelector('title')?.textContent ?? '',
@@ -76,6 +82,7 @@ export async function fetchYouTubeRSS(trackedChannels) {
           thumbnail:   videoId ? `https://i.ytimg.com/vi/${videoId}/mqdefault.jpg` : null,
           channelName: ch.name,
           channelId:   ch.resolvedId,
+          views,       // number | null
         }
       }).filter(v => v.videoId)
     })

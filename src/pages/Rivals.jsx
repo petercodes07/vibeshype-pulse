@@ -827,8 +827,18 @@ function ActivityCard({ video: v, isNew, onPlay }) {
         }}>
           {v.title}
         </div>
-        <div style={{ fontSize: 11, color: 'var(--gray)', marginTop: 4 }}>
-          {timeAgo(v.publishedAt)}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
+          {v.views > 0 && (
+            <span style={{
+              fontSize: 11, fontWeight: 700,
+              color: 'var(--secondary)',
+              background: 'rgba(29,185,84,0.1)',
+              padding: '1px 6px', borderRadius: 100,
+            }}>
+              👁 {fmtSubs(v.views)}
+            </span>
+          )}
+          <span style={{ fontSize: 11, color: 'var(--gray)' }}>{timeAgo(v.publishedAt)}</span>
         </div>
       </div>
     </div>

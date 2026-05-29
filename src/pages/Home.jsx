@@ -608,6 +608,11 @@ function ActivityRow({ video: v, onPlay }) {
         }}>
           {v.title}
         </div>
+        {v.views > 0 && (
+          <div style={{ fontSize: 10, color: 'var(--secondary)', fontWeight: 700, marginTop: 2 }}>
+            👁 {fmtK(v.views)} views
+          </div>
+        )}
       </div>
       <div style={{ fontSize: 11, color: 'var(--gray)', flexShrink: 0, whiteSpace: 'nowrap' }}>
         {timeAgo(v.publishedAt)}

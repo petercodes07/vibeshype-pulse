@@ -1,6 +1,8 @@
+import { useState, useCallback } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { ToastProvider } from './context/ToastContext'
+import useKeyboardShortcuts from './hooks/useKeyboardShortcuts'
 import AuthScreen from './pages/AuthScreen'
 import Home from './pages/Home'
 import PulseToday from './pages/PulseToday'
@@ -14,10 +16,17 @@ import Competitors from './pages/Competitors'
 import Rivals from './pages/Rivals'
 import Settings from './pages/Settings'
 import SideNav from './components/SideNav'
+import ShortcutsModal from './components/ShortcutsModal'
 import ErrorBoundary from './components/ErrorBoundary'
 
 function Router() {
   const { user, loading } = useAuth()
+
+  const [showShortcuts, setShowShortcuts] = useState(false)
+  const handleShowShortcuts = useCallback(() => setShowShortcuts(true), [])
+
+  // Register global keyboard shortcuts (harmless when logged out)
+  useKeyboardShortcuts(handleShowShortcuts)
 
   if (loading) {
     return (
@@ -46,7 +55,7 @@ function Router() {
   // Authenticated — go straight to the dashboard, no onboarding gate
   return (
     <div className="app">
-      <SideNav />
+      <SideNav onShowShortcuts={handleShowShortcuts} />
       <div className="app-main">
         <Routes>
           <Route path="/"                  element={<Navigate to="/pulse/home" replace />} />
@@ -62,6 +71,11 @@ function Router() {
           <Route path="*"                  element={<Navigate to="/" replace />} />
         </Routes>
       </div>
+
+      {/* Global shortcuts modal */}
+      {showShortcuts && (
+        <ShortcutsModal onClose={() => setShowShortcuts(false)} />
+      )}
     </div>
   )
 }

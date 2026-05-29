@@ -12,6 +12,7 @@
 import { useState, useEffect } from 'react'
 import { X, Play, Tv, Plus, Check } from 'lucide-react'
 import { rivals, pulse, competitors as competitorsApi } from '../api'
+import { fetchYouTubeRSS } from '../utils/youtube'
 
 // ── localStorage helpers ──────────────────────────────────────────────────────
 
@@ -29,115 +30,7 @@ function saveJSON(key, val) {
   localStorage.setItem(key, JSON.stringify(val))
 }
 
-// ── YouTube RSS fallback ──────────────────────────────────────────────────────
-
-async function resolveToUCId(ch) {
-  if (ch.channelId?.startsWith('UC')) return ch.channelId
-  if (!ch.channelId?.startsWith('custom_')) return null
-
-  const url = ch.channelId.slice('custom_'.length)
-  const cacheKey = `yt_cid:${url}`
-  const cached = localStorage.getItem(cacheKey)
-  if (cached) { console.error('[rss] cache hit', url, '→', cached); return cached }
-
-  console.error('[rss] resolving channel ID for', url)
-
-  // Approach 1 — fetch YouTube channel page variants
-  const patterns = [
-    /feeds\/videos\.xml\?channel_id=(UC[\w-]{22})/,
-    /"channelId":"(UC[\w-]{22})"/,
-    /"externalId":"(UC[\w-]{22})"/,
-    /\/channel\/(UC[\w-]{22})/,
-  ]
-  for (const pageUrl of [url, url + '/videos', url + '/about']) {
-    try {
-      const res = await fetch(pageUrl, { signal: AbortSignal.timeout(10000) })
-      if (!res.ok) { console.error('[rss] page', pageUrl, 'returned', res.status); continue }
-      const html = await res.text()
-      console.error('[rss] fetched', pageUrl, '— length:', html.length)
-      for (const pat of patterns) {
-        const m = html.match(pat)
-        if (m) {
-          console.error('[rss] resolved via page', pageUrl, '→', m[1])
-          localStorage.setItem(cacheKey, m[1])
-          return m[1]
-        }
-      }
-      console.error('[rss] no channel ID in page — excerpt:', html.slice(0, 200))
-    } catch (e) {
-      console.error('[rss] page fetch error for', pageUrl, ':', e.message)
-    }
-  }
-
-  // Approach 2 — Piped open-source YouTube API (no key needed)
-  try {
-    const handle = url.split('@').pop()?.split(/[/?#]/)[0]
-    if (handle) {
-      console.error('[rss] trying Piped API for handle:', handle)
-      const res = await fetch(`https://pipedapi.kavin.rocks/channel/@${handle}`, { signal: AbortSignal.timeout(8000) })
-      if (res.ok) {
-        const data = await res.json()
-        const id = (data?.id ?? '').replace(/^\/channel\//, '')
-        if (id.startsWith('UC')) {
-          console.error('[rss] Piped resolved', handle, '→', id)
-          localStorage.setItem(cacheKey, id)
-          return id
-        }
-        console.error('[rss] Piped unexpected:', JSON.stringify(data).slice(0, 150))
-      } else {
-        console.error('[rss] Piped returned', res.status)
-      }
-    }
-  } catch (e) {
-    console.error('[rss] Piped API error:', e.message)
-  }
-
-  console.error('[rss] could not resolve channel ID for', url)
-  return null
-}
-
-async function fetchYouTubeRSS(trackedChannels) {
-  console.log('[rss] starting for', trackedChannels.length, 'channels')
-  const resolved = await Promise.all(
-    trackedChannels.map(async ch => ({ ...ch, resolvedId: await resolveToUCId(ch) }))
-  )
-  const valid = resolved.filter(ch => ch.resolvedId)
-  console.log('[rss] resolved IDs:', valid.map(c => c.resolvedId))
-  if (!valid.length) return []
-
-  const results = await Promise.allSettled(
-    valid.map(async ch => {
-      const feedUrl = `https://www.youtube.com/feeds/videos.xml?channel_id=${ch.resolvedId}`
-      console.log('[rss] fetching feed', feedUrl)
-      const res = await fetch(feedUrl, { signal: AbortSignal.timeout(8000) })
-      if (!res.ok) { console.warn('[rss] feed error', res.status); return [] }
-      const text = await res.text()
-      const doc = new DOMParser().parseFromString(text, 'application/xml')
-      const entries = [...doc.querySelectorAll('entry')]
-      console.log('[rss]', ch.name, entries.length, 'entries')
-      return entries.slice(0, 8).map(e => {
-        const link = e.querySelector('link')?.getAttribute('href') ?? ''
-        const videoId = link.match(/[?&]v=([^&]+)/)?.[1]
-          ?? e.querySelector('id')?.textContent?.split(':').pop() ?? ''
-        return {
-          videoId,
-          title:       e.querySelector('title')?.textContent ?? '',
-          publishedAt: e.querySelector('published')?.textContent ?? '',
-          thumbnail:   videoId ? `https://i.ytimg.com/vi/${videoId}/mqdefault.jpg` : null,
-          channelName: ch.name,
-          channelId:   ch.resolvedId,
-        }
-      }).filter(v => v.videoId)
-    })
-  )
-
-  const videos = results
-    .filter(r => r.status === 'fulfilled')
-    .flatMap(r => r.value)
-    .sort((a, b) => new Date(b.publishedAt) - new Date(a.publishedAt))
-  console.log('[rss] total videos:', videos.length)
-  return videos
-}
+// fetchYouTubeRSS is imported from ../utils/youtube
 
 // ── Main component ────────────────────────────────────────────────────────────
 

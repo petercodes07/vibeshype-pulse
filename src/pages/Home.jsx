@@ -1,10 +1,11 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { pulse, rivals } from '../api'
+import { fetchYouTubeRSS } from '../utils/youtube'
 import {
   Tv, Flame, TrendingUp, Trophy, ChevronRight,
-  Music2, Play, Check, X,
+  Music2, Play, Check, X, RefreshCw,
 } from 'lucide-react'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -61,10 +62,11 @@ export default function Home() {
   const [picks, setPicks]         = useState(null)
   const [picksLoading, setPicksL] = useState(true)
 
-  const [activity, setActivity]   = useState(null)
-  const [actLoading, setActL]     = useState(false)
+  const [activity,    setActivity]  = useState(null)
+  const [actLoading,  setActL]      = useState(false)
+  const [activeVideo, setActiveVideo] = useState(null) // in-app player
 
-  const [actedIds, setActedIds]   = useState(new Set())
+  const [actedIds, setActedIds] = useState(new Set())
 
   useEffect(() => {
     pulse.today()
@@ -73,15 +75,27 @@ export default function Home() {
       .finally(() => setPicksL(false))
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  useEffect(() => {
+  const loadActivity = useCallback(async () => {
     if (!trackedRivals.length) { setActivity([]); return }
     setActL(true)
-    const ids = trackedRivals.map(r => r.channelId).join(',')
-    rivals.activity(ids)
-      .then(d => setActivity(d?.videos ?? []))
-      .catch(() => setActivity([]))
-      .finally(() => setActL(false))
+    try {
+      const ids = trackedRivals.map(r => r.channelId).join(',')
+      const d = await rivals.activity(ids)
+      setActivity(d?.videos ?? [])
+    } catch {
+      // API not deployed — fall back to YouTube RSS
+      try {
+        const videos = await fetchYouTubeRSS(trackedRivals)
+        setActivity(videos)
+      } catch {
+        setActivity([])
+      }
+    } finally {
+      setActL(false)
+    }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => { loadActivity() }, [loadActivity])
 
   function handlePickAction(id, action) {
     pulse.act(id, action).catch(() => {})
@@ -185,7 +199,13 @@ export default function Home() {
         </Section>
 
         {/* ── Competitor Activity ── */}
-        <Section title="Competitor Activity" linkTo="/pulse/competitors" linkLabel="See all">
+        <Section
+          title="Competitor Activity"
+          linkTo="/pulse/competitors"
+          linkLabel="See all"
+          onRefresh={trackedRivals.length ? loadActivity : null}
+          refreshing={actLoading}
+        >
           {actLoading ? (
             <Spinner />
           ) : !trackedRivals.length ? (
@@ -211,14 +231,28 @@ export default function Home() {
               </Link>
             </div>
           ) : !activity?.length ? (
-            <div style={{ fontSize: 13, color: 'var(--gray)', padding: '4px 0' }}>
-              No recent activity from your competitors
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div style={{ fontSize: 13, color: 'var(--gray)' }}>No recent posts found</div>
+              <button
+                onClick={loadActivity}
+                style={{ fontSize: 12, fontWeight: 700, color: 'var(--primary)', background: 'none', padding: 0 }}
+              >
+                Retry
+              </button>
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {activity.slice(0, 4).map(v => (
-                <ActivityRow key={v.videoId} video={v} />
+              {activity.slice(0, 5).map(v => (
+                <ActivityRow key={v.videoId} video={v} onPlay={setActiveVideo} />
               ))}
+              {activity.length > 5 && (
+                <Link
+                  to="/pulse/competitors"
+                  style={{ fontSize: 12, fontWeight: 700, color: 'var(--primary)', textDecoration: 'none', paddingTop: 2 }}
+                >
+                  + {activity.length - 5} more posts →
+                </Link>
+              )}
             </div>
           )}
         </Section>
@@ -293,24 +327,45 @@ export default function Home() {
         </div>
 
       </div>
+
+      {/* In-app video player */}
+      {activeVideo && (
+        <VideoModal video={activeVideo} onClose={() => setActiveVideo(null)} />
+      )}
     </div>
   )
 }
 
 // ── Section wrapper ───────────────────────────────────────────────────────────
 
-function Section({ title, linkTo, linkLabel, children }) {
+function Section({ title, linkTo, linkLabel, onRefresh, refreshing, children }) {
   return (
     <div>
       <div style={{
         display: 'flex', alignItems: 'center',
         justifyContent: 'space-between', marginBottom: 10,
       }}>
-        <div style={{
-          fontSize: 11, fontWeight: 700, textTransform: 'uppercase',
-          letterSpacing: '0.8px', color: 'var(--gray)',
-        }}>
-          {title}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{
+            fontSize: 11, fontWeight: 700, textTransform: 'uppercase',
+            letterSpacing: '0.8px', color: 'var(--gray)',
+          }}>
+            {title}
+          </div>
+          {onRefresh && (
+            <button
+              onClick={onRefresh}
+              disabled={refreshing}
+              title="Refresh"
+              style={{
+                background: 'none', border: 'none', padding: 2,
+                color: 'var(--gray)', cursor: 'pointer',
+                opacity: refreshing ? 0.4 : 1,
+              }}
+            >
+              <RefreshCw size={12} strokeWidth={2} className={refreshing ? 'spin' : ''} />
+            </button>
+          )}
         </div>
         {linkTo && linkLabel && (
           <Link to={linkTo} style={{
@@ -500,33 +555,49 @@ function HomePickRow({ pick, rank, onAction }) {
 
 // ── Activity row ──────────────────────────────────────────────────────────────
 
-function ActivityRow({ video: v }) {
+function ActivityRow({ video: v, onPlay }) {
+  const [hovered, setHovered] = useState(false)
   return (
-    <a
-      href={`https://youtube.com/watch?v=${v.videoId}`}
-      target="_blank"
-      rel="noreferrer"
+    <div
+      onClick={() => onPlay(v)}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
       style={{
-        background: 'var(--surface)', borderRadius: 'var(--radius-sm)',
+        background: hovered ? 'var(--surface2)' : 'var(--surface)',
+        borderRadius: 'var(--radius-sm)',
         border: '1px solid var(--border)',
         display: 'flex', gap: 10, padding: '10px 12px',
-        textDecoration: 'none', alignItems: 'center',
+        alignItems: 'center', cursor: 'pointer',
+        transition: 'background 0.15s',
       }}
     >
-      {v.thumbnail ? (
-        <img
-          src={v.thumbnail}
-          alt=""
-          style={{ width: 72, height: 42, borderRadius: 5, objectFit: 'cover', flexShrink: 0 }}
-        />
-      ) : (
+      <div style={{ position: 'relative', flexShrink: 0 }}>
+        {v.thumbnail ? (
+          <img
+            src={v.thumbnail}
+            alt=""
+            style={{ width: 72, height: 42, borderRadius: 5, objectFit: 'cover', display: 'block' }}
+          />
+        ) : (
+          <div style={{
+            width: 72, height: 42, borderRadius: 5, background: 'var(--surface2)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>
+            <Play size={14} color="var(--gray)" />
+          </div>
+        )}
+        {/* Play overlay on hover */}
         <div style={{
-          width: 72, height: 42, borderRadius: 5, background: 'var(--surface2)',
-          flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
+          position: 'absolute', inset: 0,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          borderRadius: 5,
+          background: 'rgba(0,0,0,0.45)',
+          opacity: hovered ? 1 : 0,
+          transition: 'opacity 0.15s',
         }}>
-          <Play size={14} color="var(--gray)" />
+          <Play size={16} color="#fff" fill="#fff" />
         </div>
-      )}
+      </div>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--primary)', marginBottom: 2 }}>
           {v.channelName}
@@ -541,7 +612,86 @@ function ActivityRow({ video: v }) {
       <div style={{ fontSize: 11, color: 'var(--gray)', flexShrink: 0, whiteSpace: 'nowrap' }}>
         {timeAgo(v.publishedAt)}
       </div>
-    </a>
+    </div>
+  )
+}
+
+// ── Video modal ───────────────────────────────────────────────────────────────
+
+function VideoModal({ video, onClose }) {
+  useEffect(() => {
+    const handler = (e) => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [onClose])
+
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 1000,
+        background: 'rgba(0,0,0,0.85)',
+        display: 'flex', flexDirection: 'column',
+        alignItems: 'center', justifyContent: 'center',
+        padding: 20,
+      }}
+    >
+      {/* Title bar */}
+      <div
+        onClick={e => e.stopPropagation()}
+        style={{
+          width: '100%', maxWidth: 640,
+          display: 'flex', alignItems: 'center', gap: 10,
+          marginBottom: 8,
+        }}
+      >
+        <div style={{
+          flex: 1, fontSize: 13, fontWeight: 700, color: '#fff',
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+        }}>
+          {video.title}
+        </div>
+        <button
+          onClick={onClose}
+          style={{
+            background: 'rgba(255,255,255,0.12)', border: 'none',
+            color: '#fff', borderRadius: '50%',
+            width: 30, height: 30,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            cursor: 'pointer', flexShrink: 0,
+          }}
+        >
+          <X size={15} strokeWidth={2.5} />
+        </button>
+      </div>
+
+      {/* Player */}
+      <div
+        onClick={e => e.stopPropagation()}
+        style={{
+          width: '100%', maxWidth: 640,
+          aspectRatio: '16/9',
+          borderRadius: 10, overflow: 'hidden',
+          background: '#000',
+        }}
+      >
+        <iframe
+          src={`https://www.youtube.com/embed/${video.videoId}?autoplay=1&rel=0`}
+          allow="autoplay; encrypted-media; fullscreen"
+          allowFullScreen
+          style={{ width: '100%', height: '100%', border: 'none', display: 'block' }}
+          title={video.title}
+        />
+      </div>
+
+      {/* Channel name */}
+      <div
+        onClick={e => e.stopPropagation()}
+        style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', marginTop: 8 }}
+      >
+        {video.channelName}
+      </div>
+    </div>
   )
 }
 

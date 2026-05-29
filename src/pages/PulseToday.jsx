@@ -59,7 +59,6 @@ const MOCK_PICKS = [
 
 export default function PulseToday() {
   const [picks, setPicks] = useState(null)
-  const [showMore, setShowMore] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const pollRef = useRef(null)
 
@@ -93,7 +92,6 @@ export default function PulseToday() {
 
   const today = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
   const displayPicks = picks ?? []
-  const mainPicks = displayPicks.slice(0, 5)
 
   return (
     <div className="screen">
@@ -115,9 +113,9 @@ export default function PulseToday() {
         <div className="today-sub">
           {picks === null
             ? 'Loading your picks…'
-            : mainPicks.length === 0
+            : displayPicks.length === 0
             ? 'Generating your picks — checking back every minute…'
-            : `${mainPicks.length} song${mainPicks.length > 1 ? 's' : ''} trending in your niche`}
+            : `${displayPicks.length} song${displayPicks.length > 1 ? 's' : ''} trending in your niche`}
         </div>
       </div>
 
@@ -141,19 +139,10 @@ export default function PulseToday() {
           </button>
         </div>
       ) : (
-        mainPicks.map((pick, i) => (
+        displayPicks.map((pick, i) => (
           <PickCard key={pick.id} pick={pick} rank={i + 1} onAction={handleAction} />
         ))
       )}
-
-      {!showMore && displayPicks.length > 5 && (
-        <button className="show-more-btn" onClick={() => setShowMore(true)}>
-          Show {displayPicks.length - 5} more (lower confidence)
-        </button>
-      )}
-      {showMore && displayPicks.slice(5).map((pick, i) => (
-        <PickCard key={pick.id} pick={pick} rank={i + 6} onAction={handleAction} />
-      ))}
     </div>
   )
 }

@@ -5,7 +5,7 @@ import { pulse, rivals } from '../api'
 import { fetchYouTubeRSS } from '../utils/youtube'
 import {
   Tv, Flame, TrendingUp, Trophy, ChevronRight,
-  Music2, Play, Check, X, RefreshCw,
+  Music2, Play, Check, X, RefreshCw, Swords, UserCircle,
 } from 'lucide-react'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -102,7 +102,7 @@ export default function Home() {
     setActedIds(prev => new Set([...prev, id]))
   }
 
-  const visiblePicks = (picks ?? []).filter(p => !actedIds.has(p.id)).slice(0, 3)
+  const visiblePicks = (picks ?? []).filter(p => !actedIds.has(p.id)).slice(0, 5)
   const today = new Date().toLocaleDateString('en-GB', {
     weekday: 'long', day: 'numeric', month: 'long',
   })
@@ -145,6 +145,11 @@ export default function Home() {
       </div>
 
       <div style={{ padding: '0 16px', paddingBottom: 40, display: 'flex', flexDirection: 'column', gap: 24 }}>
+
+        {/* ── Getting-started guide (fresh users only) ── */}
+        {myChannels.length === 0 && trackedRivals.length === 0 && (
+          <GettingStartedCard />
+        )}
 
         {/* ── My Channels ── */}
         <Section title="My Channels" linkTo="/pulse/profile" linkLabel="Manage">
@@ -695,6 +700,102 @@ function VideoModal({ video, onClose }) {
         style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', marginTop: 8 }}
       >
         {video.channelName}
+      </div>
+    </div>
+  )
+}
+
+// ── Getting-started card (shown to brand-new users) ──────────────────────────
+
+const SETUP_STEPS = [
+  {
+    icon: UserCircle,
+    title: 'Link your channel',
+    body:  'Connect your YouTube channel so we can find competitors in your niche.',
+    cta:   'Go to Profile →',
+    to:    '/pulse/profile',
+    done:  false, // checked dynamically
+  },
+  {
+    icon: Swords,
+    title: 'Track competitors',
+    body:  'Add channels you compete with. We\'ll monitor when they post.',
+    cta:   'Find Competitors →',
+    to:    '/pulse/competitors',
+  },
+  {
+    icon: Music2,
+    title: 'Get daily picks',
+    body:  'Once competitors are tracked, your personalised song picks generate automatically.',
+    cta:   'See Today\'s Picks →',
+    to:    '/pulse/today',
+  },
+]
+
+function GettingStartedCard() {
+  return (
+    <div style={{
+      background: 'linear-gradient(135deg, rgba(255,59,59,0.07), rgba(99,102,241,0.05))',
+      border: '1px solid var(--border)',
+      borderRadius: 'var(--radius)',
+      padding: '20px 16px',
+    }}>
+      <div style={{ fontSize: 16, fontWeight: 800, marginBottom: 3 }}>👋 Welcome to Pulse</div>
+      <div style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.55, marginBottom: 18 }}>
+        3 quick steps to start tracking competitors and getting daily song picks.
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {SETUP_STEPS.map((step, i) => {
+          const Icon = step.icon
+          return (
+            <Link
+              key={i}
+              to={step.to}
+              style={{ textDecoration: 'none' }}
+            >
+              <div style={{
+                display: 'flex', gap: 14, alignItems: 'flex-start',
+                background: 'var(--surface)', borderRadius: 'var(--radius-sm)',
+                border: '1px solid var(--border)',
+                padding: '12px 14px',
+                transition: 'border-color 0.15s',
+              }}>
+                {/* Step number + icon */}
+                <div style={{
+                  width: 36, height: 36, borderRadius: '50%', flexShrink: 0,
+                  background: 'var(--surface2)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  position: 'relative',
+                }}>
+                  <Icon size={16} strokeWidth={1.75} color="var(--primary)" />
+                  <div style={{
+                    position: 'absolute', top: -4, right: -4,
+                    width: 16, height: 16, borderRadius: '50%',
+                    background: 'var(--surface2)', border: '1.5px solid var(--border)',
+                    fontSize: 9, fontWeight: 800, color: 'var(--gray)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}>
+                    {i + 1}
+                  </div>
+                </div>
+
+                {/* Text */}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--light)', marginBottom: 2 }}>
+                    {step.title}
+                  </div>
+                  <div style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.45, marginBottom: 6 }}>
+                    {step.body}
+                  </div>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--primary)' }}>
+                    {step.cta}
+                  </div>
+                </div>
+              </div>
+            </Link>
+          )
+        })}
       </div>
     </div>
   )

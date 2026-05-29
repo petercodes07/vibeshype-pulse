@@ -1,10 +1,19 @@
 import { useState } from 'react'
-import { Music2, Flame, TrendingUp, Trophy, FileText, SlidersHorizontal, Check, X, ChevronDown, ChevronUp } from 'lucide-react'
+import { Music2, Flame, TrendingUp, Trophy, FileText, SlidersHorizontal, Check, X, ChevronDown, ChevronUp, Copy } from 'lucide-react'
 
 export default function PickCard({ pick, rank, onAction }) {
   const [expanded, setExpanded] = useState(false)
   const [acted, setActed] = useState(false)
   const [coverFailed, setCoverFailed] = useState(false)
+  const [copied, setCopied] = useState(false)
+
+  function handleCopy(e) {
+    e.stopPropagation()
+    const text = pick.artist ? `${pick.title} - ${pick.artist}` : pick.title
+    navigator.clipboard.writeText(text).catch(() => {})
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
 
   if (!pick || acted) return null
 
@@ -83,9 +92,26 @@ export default function PickCard({ pick, rank, onAction }) {
           </div>
         </div>
 
-        {/* Chevron */}
-        <div style={{ color: 'var(--gray)', flexShrink: 0 }}>
-          {expanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+        {/* Copy + Chevron */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+          <button
+            onClick={handleCopy}
+            title="Copy song title"
+            style={{
+              display: 'flex', alignItems: 'center', gap: 4,
+              padding: '4px 8px', borderRadius: 6,
+              background: copied ? 'rgba(29,185,84,0.15)' : 'var(--surface2)',
+              color: copied ? 'var(--secondary)' : 'var(--gray)',
+              fontSize: 11, fontWeight: 700,
+              transition: 'all 0.15s',
+            }}
+          >
+            {copied ? <Check size={11} strokeWidth={2.5} /> : <Copy size={11} strokeWidth={2} />}
+            {copied ? 'Copied' : 'Copy'}
+          </button>
+          <div style={{ color: 'var(--gray)' }}>
+            {expanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+          </div>
         </div>
       </div>
 

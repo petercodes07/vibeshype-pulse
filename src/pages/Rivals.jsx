@@ -394,17 +394,19 @@ function DiscoverTab({
   const [myChannelUrl,     setMyChannelUrl]     = useState('')
   const [myChannelLoading, setMyChannelLoading] = useState(false)
   const [myChannelError,   setMyChannelError]   = useState(null)
+  const [foundChannels,    setFoundChannels]    = useState([]) // streaming results while searching
 
   async function handleLinkChannel() {
     const val = myChannelUrl.trim()
     if (!val) return
     setMyChannelLoading(true)
     setMyChannelError(null)
+    setFoundChannels([])
     try {
       const data = await pulse.onboard(val)
       let id = data?.channel?.channelId ?? data?.profile?.channelId ?? null
       if (!id && data?.analysisId) {
-        id = await pollForChannelId(data.analysisId)
+        id = await pollForChannelId(data.analysisId, setFoundChannels)
       }
       if (!id) throw new Error('No channel ID in response')
       onChannelIdResolved(id)
@@ -412,15 +414,19 @@ function DiscoverTab({
       setMyChannelError('Could not find that channel. Check the URL and try again.')
     } finally {
       setMyChannelLoading(false)
+      setFoundChannels([])
     }
   }
 
-  function pollForChannelId(analysisId, timeoutMs = 90_000) {
+  function pollForChannelId(analysisId, onProgress, timeoutMs = 90_000) {
     return new Promise((resolve, reject) => {
       const deadline = setTimeout(() => { clearInterval(iv); reject(new Error('Timed out')) }, timeoutMs)
       const iv = setInterval(async () => {
         try {
           const data = await pulse.onboardStatus(analysisId)
+          // Surface any partial channels the server has found so far
+          const partial = data.peers ?? data.channels ?? data.competitors ?? data.found ?? []
+          if (partial.length) onProgress(partial)
           if (data.status === 'complete') {
             clearInterval(iv); clearTimeout(deadline)
             resolve(data?.channel?.channelId ?? data?.profile?.channelId ?? null)
@@ -488,33 +494,40 @@ function DiscoverTab({
           border: '1px solid rgba(99,102,241,0.25)',
           borderRadius: 'var(--radius-sm)',
           padding: '12px 14px',
-          display: 'flex', flexDirection: 'column', gap: 10,
         }}>
-          <div style={{ fontSize: 13, fontWeight: 700 }}>Link YOUR channel for AI suggestions</div>
-          <div style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.5 }}>
-            This is <strong>your own</strong> YouTube channel — not a competitor's. We'll analyse it once to find matching competitors automatically.
-          </div>
-          <div className="input-wrap" style={{ marginBottom: 0 }}>
-            <input
-              type="url"
-              placeholder="https://youtube.com/@yourchannel"
-              value={myChannelUrl}
-              onChange={e => { setMyChannelUrl(e.target.value); setMyChannelError(null) }}
-              onKeyDown={e => e.key === 'Enter' && handleLinkChannel()}
-            />
-            <span className="input-icon"><Tv size={15} strokeWidth={1.75} /></span>
-          </div>
-          {myChannelError && (
-            <div style={{ fontSize: 12, color: '#ff7070' }}>{myChannelError}</div>
+          {!myChannelLoading ? (
+            /* ── Normal: URL input ── */
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div style={{ fontSize: 13, fontWeight: 700 }}>Link YOUR channel for AI suggestions</div>
+              <div style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.5 }}>
+                This is <strong>your own</strong> YouTube channel — not a competitor's. We'll analyse it once to find matching competitors automatically.
+              </div>
+              <div className="input-wrap" style={{ marginBottom: 0 }}>
+                <input
+                  type="url"
+                  placeholder="https://youtube.com/@yourchannel"
+                  value={myChannelUrl}
+                  onChange={e => { setMyChannelUrl(e.target.value); setMyChannelError(null) }}
+                  onKeyDown={e => e.key === 'Enter' && handleLinkChannel()}
+                />
+                <span className="input-icon"><Tv size={15} strokeWidth={1.75} /></span>
+              </div>
+              {myChannelError && (
+                <div style={{ fontSize: 12, color: '#ff7070' }}>{myChannelError}</div>
+              )}
+              <button
+                className="btn-primary"
+                disabled={!myChannelUrl.trim()}
+                onClick={handleLinkChannel}
+                style={{ marginTop: 0 }}
+              >
+                Find my competitors →
+              </button>
+            </div>
+          ) : (
+            /* ── Loading: live channel stream ── */
+            <ScanningUI foundChannels={foundChannels} />
           )}
-          <button
-            className="btn-primary"
-            disabled={!myChannelUrl.trim() || myChannelLoading}
-            onClick={handleLinkChannel}
-            style={{ marginTop: 0 }}
-          >
-            {myChannelLoading ? 'Analysing…' : 'Find my competitors →'}
-          </button>
         </div>
       )}
 
@@ -952,6 +965,117 @@ function ChannelModal({ channel, onClose, onPlay }) {
           ))}
         </div>
       </div>
+    </div>
+  )
+}
+
+// ── Scanning UI (shown while competitor search is running) ───────────────────
+
+const SCAN_MESSAGES = [
+  'Analysing your content…',
+  'Scanning your niche…',
+  'Identifying competitor channels…',
+  'Scoring matches…',
+]
+
+function ScanningUI({ foundChannels }) {
+  const [progress, setProgress] = useState(0)
+
+  // Fake progress bar: fills to ~85% over 35 s, then stalls until done
+  useEffect(() => {
+    const iv = setInterval(() => {
+      setProgress(p => {
+        if (p >= 85) return p
+        const step = (85 / 35000) * 250 + (Math.random() - 0.45) * 0.4
+        return Math.min(p + step, 85)
+      })
+    }, 250)
+    return () => clearInterval(iv)
+  }, [])
+
+  const msgIdx = Math.min(Math.floor(progress / 22), SCAN_MESSAGES.length - 1)
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+
+      {/* Header row */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div className="spinner" style={{ width: 16, height: 16, borderWidth: 2, flexShrink: 0 }} />
+        <div>
+          <div style={{ fontSize: 13, fontWeight: 700 }}>
+            {SCAN_MESSAGES[msgIdx]}
+          </div>
+          <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 1 }}>
+            {foundChannels.length > 0
+              ? `${foundChannels.length} channel${foundChannels.length !== 1 ? 's' : ''} found so far…`
+              : 'This takes 20–40 seconds'}
+          </div>
+        </div>
+      </div>
+
+      {/* Progress bar */}
+      <div style={{ height: 3, background: 'var(--surface2)', borderRadius: 2, overflow: 'hidden' }}>
+        <div style={{
+          height: '100%', borderRadius: 2,
+          background: 'linear-gradient(90deg, rgba(99,102,241,0.9), rgba(29,185,84,0.8))',
+          width: `${progress}%`,
+          transition: 'width 0.25s ease-out',
+        }} />
+      </div>
+
+      {/* Live channel list */}
+      {foundChannels.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 2 }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--gray)', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: 2 }}>
+            Channels found
+          </div>
+          {foundChannels.map((ch, i) => (
+            <FoundChannelRow key={ch.channelId ?? ch.id ?? i} channel={ch} />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function FoundChannelRow({ channel: ch }) {
+  const [fresh, setFresh] = useState(true)
+
+  // Green "just found" flash fades after 1.5 s
+  useEffect(() => {
+    const t = setTimeout(() => setFresh(false), 1500)
+    return () => clearTimeout(t)
+  }, [])
+
+  const name = ch.name ?? ch.channelName ?? ch.handle ?? 'Unknown Channel'
+  const src  = ch.thumbnail_url ?? ch.avatar ?? null
+
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 10,
+      padding: '7px 8px', borderRadius: 6,
+      background: fresh ? 'rgba(29,185,84,0.08)' : 'transparent',
+      transition: 'background 1s ease',
+    }}>
+      <Avatar name={name} src={src} size={28} />
+      <div style={{
+        flex: 1, minWidth: 0,
+        fontSize: 13, fontWeight: 600,
+        whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+        color: 'var(--light)',
+      }}>
+        {name}
+      </div>
+      {fresh && (
+        <span style={{
+          fontSize: 10, fontWeight: 700,
+          color: 'var(--secondary)',
+          background: 'rgba(29,185,84,0.15)',
+          padding: '2px 7px', borderRadius: 100, flexShrink: 0,
+        }}>
+          found
+        </span>
+      )}
     </div>
   )
 }

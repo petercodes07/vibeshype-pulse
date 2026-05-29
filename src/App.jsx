@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './context/AuthContext'
+import { ToastProvider } from './context/ToastContext'
 import AuthScreen from './pages/AuthScreen'
 import Home from './pages/Home'
 import PulseToday from './pages/PulseToday'
@@ -69,9 +70,11 @@ export default function App() {
   return (
     <ErrorBoundary>
       <BrowserRouter>
-        <AuthProvider>
-          <Router />
-        </AuthProvider>
+        <ToastProvider>
+          <AuthProvider>
+            <Router />
+          </AuthProvider>
+        </ToastProvider>
       </BrowserRouter>
     </ErrorBoundary>
   )

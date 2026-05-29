@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react'
 import { NavLink } from 'react-router-dom'
-import { House, Music2, Swords, UserCircle, Settings } from 'lucide-react'
+import { House, Music2, Swords, BarChart2, UserCircle, Settings } from 'lucide-react'
 
 const NAV_ITEMS = [
-  { to: '/pulse/home',   icon: House,   label: 'Home'   },
-  { to: '/pulse/today',  icon: Music2,  label: 'Today'  },
-  { to: '/pulse/competitors', icon: Swords,  label: 'Competitors' },
+  { to: '/pulse/home',        icon: House,     label: 'Home'        },
+  { to: '/pulse/today',       icon: Music2,    label: 'Today'       },
+  { to: '/pulse/competitors', icon: Swords,    label: 'Competitors' },
+  { to: '/pulse/history',     icon: BarChart2, label: 'History'     },
 ]
 
 const BOTTOM_ITEMS = [

@@ -13,6 +13,7 @@ import { useState, useEffect } from 'react'
 import { X, Play, Tv, Plus, Check } from 'lucide-react'
 import { rivals, pulse, competitors as competitorsApi } from '../api'
 import { fetchYouTubeRSS } from '../utils/youtube'
+import { useToast } from '../context/ToastContext'
 
 // ── localStorage helpers ──────────────────────────────────────────────────────
 
@@ -56,6 +57,12 @@ export default function Rivals() {
   const [activityError,   setActivityError]   = useState(null)
   const [activityLoading, setActivityLoading] = useState(false)
   const [activityRefresh, setActivityRefresh] = useState(0) // bump to retry
+
+  // Last-posted timestamps per channel (for the Tracking tab)
+  const [lastPosted, setLastPosted] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('pulse_last_posted') || '{}') }
+    catch { return {} }
+  })
 
   // In-app modals
   const [activeVideo,   setActiveVideo]   = useState(null) // { videoId, title, channelName }
@@ -125,6 +132,31 @@ export default function Rivals() {
     load()
     return () => { cancelled = true }
   }, [tab, activityRefresh]) // re-fetches when tab changes or user hits Retry
+
+  // Silently refresh last-posted timestamps when Tracking tab opens (5 min cache)
+  useEffect(() => {
+    if (tab !== 0 || !tracked.length) return
+    const STALE = 5 * 60_000
+    const ts = parseInt(localStorage.getItem('pulse_last_posted_ts') || '0', 10)
+    if (Date.now() - ts < STALE) return
+    fetchYouTubeRSS(tracked).then(videos => {
+      // Build channelName → latestDate map first (RSS returns resolved IDs, not custom_ ones)
+      const byName = {}
+      videos.forEach(v => {
+        if (!byName[v.channelName] || v.publishedAt > byName[v.channelName])
+          byName[v.channelName] = v.publishedAt
+      })
+      // Map back to the tracked channelId (name is the reliable bridge)
+      const patch = {}
+      tracked.forEach(ch => { if (byName[ch.name]) patch[ch.channelId] = byName[ch.name] })
+      setLastPosted(prev => {
+        const next = { ...prev, ...patch }
+        localStorage.setItem('pulse_last_posted', JSON.stringify(next))
+        localStorage.setItem('pulse_last_posted_ts', String(Date.now()))
+        return next
+      })
+    }).catch(() => {})
+  }, [tab]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // When Activity tab is viewed: clear badge and mark all visible as seen
   useEffect(() => {
@@ -237,6 +269,7 @@ export default function Rivals() {
       {tab === 0 && (
         <TrackingTab
           tracked={tracked}
+          lastPosted={lastPosted}
           onRemove={removeTracked}
           onChannelPlay={setActiveChannel}
         />
@@ -292,7 +325,7 @@ export default function Rivals() {
 
 // ── Tracking tab ─────────────────────────────────────────────────────────────
 
-function TrackingTab({ tracked, onRemove, onChannelPlay }) {
+function TrackingTab({ tracked, lastPosted, onRemove, onChannelPlay }) {
   if (!tracked.length) {
     return (
       <EmptyState
@@ -308,46 +341,69 @@ function TrackingTab({ tracked, onRemove, onChannelPlay }) {
       <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray)', textTransform: 'uppercase', letterSpacing: '0.8px', marginTop: 4 }}>
         {tracked.length} channel{tracked.length !== 1 ? 's' : ''} tracked
       </div>
-      {tracked.map(ch => (
-        <div key={ch.channelId} style={{
-          background: 'var(--surface)', borderRadius: 'var(--radius-sm)',
-          padding: '10px 12px', display: 'flex', alignItems: 'center', gap: 12,
-        }}>
-          <Avatar name={ch.name} src={ch.thumbnail_url} size={40} />
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontWeight: 700, fontSize: 14, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              {ch.name}
+      {tracked.map(ch => {
+        const lastDate = lastPosted?.[ch.channelId]
+        return (
+          <div key={ch.channelId} style={{
+            background: 'var(--surface)', borderRadius: 'var(--radius-sm)',
+            padding: '10px 12px', display: 'flex', alignItems: 'center', gap: 12,
+          }}>
+            <Avatar name={ch.name} src={ch.thumbnail_url} size={40} />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontWeight: 700, fontSize: 14, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {ch.name}
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--gray)', marginTop: 2, display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+                {ch.subs && <span>{ch.subs} subs</span>}
+                {ch.handle && <span style={{ color: 'var(--border)' }}>·</span>}
+                {ch.handle && <span>{ch.handle}</span>}
+                {lastDate && (
+                  <>
+                    {(ch.subs || ch.handle) && <span style={{ color: 'var(--border)' }}>·</span>}
+                    <span style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 3,
+                      color: isRecentPost(lastDate) ? 'var(--secondary)' : 'var(--muted)',
+                    }}>
+                      {isRecentPost(lastDate) && (
+                        <span style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--secondary)', display: 'inline-block', flexShrink: 0 }} />
+                      )}
+                      {timeAgo(lastDate)}
+                    </span>
+                  </>
+                )}
+              </div>
             </div>
-            <div style={{ fontSize: 12, color: 'var(--gray)', marginTop: 1 }}>
-              {ch.subs ? `${ch.subs} subs` : ''}
-              {ch.handle ? ` · ${ch.handle}` : ''}
-            </div>
+            <button
+              onClick={() => onChannelPlay(ch)}
+              title="View recent videos"
+              style={{
+                width: 30, height: 30, borderRadius: 'var(--radius-sm)',
+                background: 'var(--surface2)', color: 'var(--gray)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+              }}
+            >
+              <Play size={14} />
+            </button>
+            <button
+              onClick={() => onRemove(ch.channelId)}
+              style={{
+                width: 30, height: 30, borderRadius: 'var(--radius-sm)',
+                background: 'var(--surface2)', color: 'var(--gray)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+              }}
+            >
+              <X size={14} />
+            </button>
           </div>
-          <button
-            onClick={() => onChannelPlay(ch)}
-            title="View recent videos"
-            style={{
-              width: 30, height: 30, borderRadius: 'var(--radius-sm)',
-              background: 'var(--surface2)', color: 'var(--gray)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-            }}
-          >
-            <Play size={14} />
-          </button>
-          <button
-            onClick={() => onRemove(ch.channelId)}
-            style={{
-              width: 30, height: 30, borderRadius: 'var(--radius-sm)',
-              background: 'var(--surface2)', color: 'var(--gray)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-            }}
-          >
-            <X size={14} />
-          </button>
-        </div>
-      ))}
+        )
+      })}
     </div>
   )
+}
+
+/** Returns true if the ISO date is within the last 48 hours */
+function isRecentPost(iso) {
+  return iso && (Date.now() - new Date(iso).getTime()) < 48 * 60 * 60_000
 }
 
 // ── Discover tab ──────────────────────────────────────────────────────────────
@@ -357,10 +413,11 @@ function DiscoverTab({
   trackedIds, dismissed, onAdd, onDismiss, onRemove,
   channelIdLoading, channelIdMissing, onChannelIdResolved,
 }) {
+  const showToast = useToast()
+
   // ── "Add competitor by URL" — always visible, no server call needed ──────────
-  const [addUrl,     setAddUrl]     = useState('')
-  const [addError,   setAddError]   = useState(null)
-  const [addSuccess, setAddSuccess] = useState('')
+  const [addUrl,   setAddUrl]   = useState('')
+  const [addError, setAddError] = useState(null)
 
   function handleAddByUrl() {
     const val = addUrl.trim()
@@ -386,8 +443,7 @@ function DiscoverTab({
     })
     setAddUrl('')
     setAddError(null)
-    setAddSuccess(`@${handle} added to Tracking ✓`)
-    setTimeout(() => setAddSuccess(''), 3000)
+    showToast(`@${handle} added to Tracking`)
   }
 
   // ── "Link your channel" — only for AI suggestions, uses pulse.onboard ────────
@@ -483,8 +539,7 @@ function DiscoverTab({
             Track
           </button>
         </div>
-        {addError   && <div style={{ fontSize: 12, color: '#ff7070',      marginTop: 6 }}>{addError}</div>}
-        {addSuccess && <div style={{ fontSize: 12, color: 'var(--secondary)', marginTop: 6 }}>{addSuccess}</div>}
+        {addError && <div style={{ fontSize: 12, color: '#ff7070', marginTop: 6 }}>{addError}</div>}
       </div>
 
       {/* ── LINK YOUR OWN CHANNEL for AI suggestions (only when missing) ── */}

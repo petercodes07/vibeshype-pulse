@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
+import { useToast } from '../context/ToastContext'
 import { auth, pulse } from '../api'
 import { Mail, AtSign, Check, X, Tv, Film, Globe, Clock, Plus, Trash2 } from 'lucide-react'
 
@@ -22,12 +23,12 @@ function initials(user) {
 
 export default function Profile() {
   const { user } = useAuth()
+  const showToast = useToast()
 
   const [editingUsername, setEditingUsername] = useState(false)
   const [usernameVal,     setUsernameVal]     = useState(user?.name ?? user?.username ?? '')
   const [usernameError,   setUsernameError]   = useState(null)
   const [saving,          setSaving]          = useState(false)
-  const [saved,           setSaved]           = useState(false)
 
   // Channels the user has linked
   const [myChannels,      setMyChannels]      = useState(() => loadMyChannels())
@@ -76,8 +77,7 @@ export default function Profile() {
     try {
       await auth.updateMe({ name: usernameVal })
       setEditingUsername(false)
-      setSaved(true)
-      setTimeout(() => setSaved(false), 2000)
+      showToast('Username saved')
     } catch (err) {
       setUsernameError(
         err.status === 409 ? 'That username is already taken.' : 'Could not save. Try again.'
@@ -223,7 +223,6 @@ export default function Profile() {
           ) : (
             <span style={{ flex: 1, fontSize: 14, color: (user?.name ?? user?.username) ? 'var(--light)' : 'var(--gray)' }}>
               {user?.name ?? user?.username ?? 'Not set'}
-              {saved && <span style={{ fontSize: 11, color: 'var(--secondary)', marginLeft: 8 }}>Saved ✓</span>}
             </span>
           )}
           {editingUsername ? (

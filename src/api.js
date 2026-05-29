@@ -110,7 +110,7 @@ export const youtube = {
 }
 
 export const pulse = USE_MOCK ? mockPulse : {
-  onboard:       (channelUrl)  => pulseReq('/api/pulse/onboard',                          { method: 'POST', body: JSON.stringify({ channelUrl }), timeout: 15000 }),
+  onboard:       (channelUrl)  => pulseReq('/api/pulse/onboard',                          { method: 'POST', body: JSON.stringify({ channelUrl }), timeout: 60000 }),
   onboardStatus: (analysisId) => pulseReq(`/api/pulse/onboard/${encodeURIComponent(analysisId)}/status`, { timeout: 10000 }),
   profile:  ()                => pulseReq('/api/pulse/profile'),
   peers:    ()                => pulseReq('/api/pulse/peers'),

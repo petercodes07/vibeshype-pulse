@@ -2,7 +2,8 @@ import { useState, useCallback } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { ToastProvider } from './context/ToastContext'
-import useKeyboardShortcuts from './hooks/useKeyboardShortcuts'
+import useKeyboardShortcuts    from './hooks/useKeyboardShortcuts'
+import useCompetitorAlerts     from './hooks/useCompetitorAlerts'
 import AuthScreen from './pages/AuthScreen'
 import Home from './pages/Home'
 import PulseToday from './pages/PulseToday'
@@ -27,6 +28,9 @@ function Router() {
 
   // Register global keyboard shortcuts (harmless when logged out)
   useKeyboardShortcuts(handleShowShortcuts)
+
+  // Smart competitor alerts — polls RSS every 20 min, no-ops when not logged in
+  useCompetitorAlerts()
 
   if (loading) {
     return (

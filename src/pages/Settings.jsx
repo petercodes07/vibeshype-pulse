@@ -1,14 +1,46 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { Bell, Trash2, LogOut, Info } from 'lucide-react'
+import { Bell, Trash2, LogOut, Info, Zap } from 'lucide-react'
 import { storage } from '../storage'
+
+// ── localStorage-backed helpers ───────────────────────────────────────────────
+
+function readBool(key, fallback = true) {
+  const v = localStorage.getItem(key)
+  if (v === null) return fallback
+  return v !== 'false'
+}
+function writeBool(key, val) { localStorage.setItem(key, val ? 'true' : 'false') }
+
+function readInt(key, fallback) {
+  const v = parseInt(localStorage.getItem(key) || '', 10)
+  return isNaN(v) ? fallback : v
+}
+function writeInt(key, val) { localStorage.setItem(key, String(val)) }
 
 export default function Settings() {
   const { logout } = useAuth()
   const navigate = useNavigate()
   const [clearing, setClearing] = useState(false)
   const [cleared,  setCleared]  = useState(false)
+
+  // Alert settings (persisted to localStorage)
+  const [alertsOn,   setAlertsOn]   = useState(() => readBool('pulse_alerts_enabled', true))
+  const [clusterN,   setClusterN]   = useState(() => readInt('pulse_alerts_cluster_threshold', 3))
+
+  function toggleAlerts(val) {
+    setAlertsOn(val)
+    writeBool('pulse_alerts_enabled', val)
+    // Request OS notification permission when enabling
+    if (val && 'Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission()
+    }
+  }
+  function changeClusterN(n) {
+    setClusterN(n)
+    writeInt('pulse_alerts_cluster_threshold', n)
+  }
 
   async function handleLogout() {
     await logout()
@@ -44,6 +76,46 @@ export default function Settings() {
           description="Get today's picks delivered every morning at 7 am"
           control={<Toggle defaultOn />}
         />
+
+        {/* Smart competitor alerts */}
+        <SectionLabel icon={<Zap size={13} />} label="Competitor Alerts" />
+        <SettingRow
+          title="Smart competitor alerts"
+          description="Get notified when multiple rivals post the same song, or when a video spikes in views."
+          control={
+            <PersistedToggle
+              on={alertsOn}
+              onChange={toggleAlerts}
+            />
+          }
+        />
+        {alertsOn && (
+          <SettingRow
+            title="Peer threshold"
+            description="Alert when this many competitors post the same song within 24 hours."
+            control={
+              <div style={{ display: 'flex', gap: 4 }}>
+                {[2, 3, 4, 5].map(n => (
+                  <button
+                    key={n}
+                    onClick={() => changeClusterN(n)}
+                    style={{
+                      width: 32, height: 28,
+                      borderRadius: 6,
+                      fontSize: 12, fontWeight: 700,
+                      background: clusterN === n ? 'var(--primary)' : 'var(--surface2)',
+                      color:      clusterN === n ? '#fff'           : 'var(--gray)',
+                      border: clusterN === n ? 'none' : '1px solid var(--border)',
+                      transition: 'all 0.15s',
+                    }}
+                  >
+                    {n}
+                  </button>
+                ))}
+              </div>
+            }
+          />
+        )}
 
         {/* Data section */}
         <SectionLabel icon={<Trash2 size={13} />} label="Data" />
@@ -136,16 +208,23 @@ function SettingRow({ title, description, control }) {
   )
 }
 
+// Uncontrolled toggle (local state only)
 function Toggle({ defaultOn = false }) {
   const [on, setOn] = useState(defaultOn)
+  return <PersistedToggle on={on} onChange={setOn} />
+}
+
+// Controlled toggle (value + onChange from parent)
+function PersistedToggle({ on, onChange }) {
   return (
     <button
-      onClick={() => setOn(v => !v)}
+      onClick={() => onChange(!on)}
       style={{
         width: 40, height: 22, borderRadius: 11,
         background: on ? 'var(--primary)' : 'var(--surface2)',
         position: 'relative', transition: 'background 0.2s',
         border: '1px solid var(--border)',
+        flexShrink: 0,
       }}
     >
       <span style={{

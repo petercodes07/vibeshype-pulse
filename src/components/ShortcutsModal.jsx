@@ -8,7 +8,8 @@ import { X, Keyboard } from 'lucide-react'
 
 // ── Shortcut definitions ──────────────────────────────────────────────────────
 
-const isMac = typeof navigator !== 'undefined' && /Mac/i.test(navigator.platform)
+// Use Electron's preload-exposed process.platform (no deprecated navigator.platform)
+const isMac = typeof window !== 'undefined' && window.pulse?.platform === 'darwin'
 const MOD   = isMac ? '⌘' : 'Ctrl'
 
 const SECTIONS = [

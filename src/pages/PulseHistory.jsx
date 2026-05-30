@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { pulse } from '../api'
 import { BarChart2, Music2, Copy, Check, Trophy, TrendingUp, TrendingDown } from 'lucide-react'
+import HistoryFilters from '../components/HistoryFilters'
 
 // ── Mock fallback data (used when server isn't available) ─────────────────────
 
@@ -63,13 +64,14 @@ const MOCK_HISTORY = [
   },
 ]
 
-const FILTERS = ['All time', 'Last 30 days', 'Last 7 days']
-
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function PulseHistory() {
-  const [history,  setHistory]  = useState(null)
-  const [filter,   setFilter]   = useState('All time')
+  const [history,    setHistory]    = useState(null)
+  const [query,      setQuery]      = useState('')
+  const [timeFilter, setTimeFilter] = useState('All time')
+  const [perfFilter, setPerfFilter] = useState('All')
+  const [sort,       setSort]       = useState('recent')
 
   useEffect(() => {
     pulse.history()
@@ -77,13 +79,42 @@ export default function PulseHistory() {
       .catch(() => setHistory(MOCK_HISTORY))
   }, [])
 
-  // Apply time filter
-  const now = Date.now()
-  const items = (history ?? []).filter(h => {
-    if (filter === 'Last 7 days')  return now - new Date(h.postedAt).getTime() <= 7  * 86_400_000
-    if (filter === 'Last 30 days') return now - new Date(h.postedAt).getTime() <= 30 * 86_400_000
-    return true
-  })
+  // Apply search + time + performance filters, then sort
+  const items = useMemo(() => {
+    const now = Date.now()
+    const q = query.trim().toLowerCase()
+    const filtered = (history ?? []).filter(h => {
+      if (timeFilter === 'Last 7 days'  && now - new Date(h.postedAt).getTime() > 7  * 86_400_000) return false
+      if (timeFilter === 'Last 30 days' && now - new Date(h.postedAt).getTime() > 30 * 86_400_000) return false
+      if (perfFilter !== 'All') {
+        const mult = h.baseline7d ? h.views7d / h.baseline7d : null
+        if (mult == null) return false
+        if (perfFilter === 'Above baseline' && mult <  1) return false
+        if (perfFilter === 'Below baseline' && mult >= 1) return false
+      }
+      if (q) {
+        const hay = `${h.title ?? ''} ${h.artist ?? ''}`.toLowerCase()
+        if (!hay.includes(q)) return false
+      }
+      return true
+    })
+
+    const sorted = [...filtered]
+    if (sort === 'lift') {
+      sorted.sort((a, b) =>
+        (b.views7d / (b.baseline7d || 1)) - (a.views7d / (a.baseline7d || 1))
+      )
+    } else if (sort === 'views') {
+      sorted.sort((a, b) => (b.views7d ?? 0) - (a.views7d ?? 0))
+    } else if (sort === 'oldest') {
+      sorted.sort((a, b) => new Date(a.postedAt) - new Date(b.postedAt))
+    } else {
+      sorted.sort((a, b) => new Date(b.postedAt) - new Date(a.postedAt))
+    }
+    return sorted
+  }, [history, query, timeFilter, perfFilter, sort])
+
+  const filtersActive = query.length > 0 || timeFilter !== 'All time' || perfFilter !== 'All'
 
   // Stats
   const avgMultiplier = items.length
@@ -105,7 +136,7 @@ export default function PulseHistory() {
         <div className="loading-screen" style={{ height: 300 }}>
           <div className="spinner" />
         </div>
-      ) : items.length === 0 && filter === 'All time' ? (
+      ) : (history ?? []).length === 0 ? (
 
         /* ── Empty state ── */
         <div style={{ margin: '40px 20px', textAlign: 'center', color: 'var(--gray)' }}>
@@ -167,31 +198,19 @@ export default function PulseHistory() {
             </div>
           )}
 
-          {/* ── Filter tabs ── */}
-          <div style={{
-            display: 'flex', gap: 6, padding: '0 16px', marginBottom: 12,
-          }}>
-            {FILTERS.map(f => (
-              <button
-                key={f}
-                onClick={() => setFilter(f)}
-                style={{
-                  padding: '5px 12px', borderRadius: 100,
-                  fontSize: 11, fontWeight: 700,
-                  background: filter === f ? 'var(--primary)' : 'var(--surface2)',
-                  color:      filter === f ? '#fff'           : 'var(--gray)',
-                  transition: 'all 0.15s',
-                }}
-              >
-                {f}
-              </button>
-            ))}
-          </div>
+          {/* ── Search & filters ── */}
+          <HistoryFilters
+            query={query}            onQueryChange={setQuery}
+            timeFilter={timeFilter}  onTimeFilterChange={setTimeFilter}
+            perfFilter={perfFilter}  onPerfFilterChange={setPerfFilter}
+            sort={sort}              onSortChange={setSort}
+            resultCount={items.length}
+          />
 
           {/* ── History list ── */}
           {items.length === 0 ? (
             <div style={{ margin: '32px 16px', textAlign: 'center', color: 'var(--gray)', fontSize: 13 }}>
-              No picks in this time period.
+              {filtersActive ? 'No picks match your filters.' : 'No picks in this time period.'}
             </div>
           ) : (
             <div className="history-list">

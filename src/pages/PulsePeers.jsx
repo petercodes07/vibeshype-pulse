@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { pulse } from '../api'
 import { Tv, X } from 'lucide-react'
+import { useActiveChannel } from '../context/ActiveChannelContext'
 
 const MOCK_PEERS = [
   { channelId: 'UC001', name: 'SoundWave Lyrics', subs: '2.3M', similarity: 0.94, source: 'ai' },
@@ -11,15 +12,17 @@ const MOCK_PEERS = [
 ]
 
 export default function PulsePeers() {
+  const { activeChannel } = useActiveChannel()
   const [peers, setPeers] = useState(null)
   const [adding, setAdding] = useState(false)
   const [newUrl, setNewUrl] = useState('')
 
   useEffect(() => {
+    setPeers(null)
     pulse.peers()
       .then(data => setPeers(data.peers ?? []))
       .catch(() => setPeers(MOCK_PEERS))
-  }, [])
+  }, [activeChannel?.channelId])
 
   function handleRemove(id) {
     setPeers(prev => prev.filter(p => p.channelId !== id))

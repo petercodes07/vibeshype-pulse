@@ -17,6 +17,13 @@ function authReq(path, opts = {}) {
 }
 
 function pulseReq(path, opts = {}) {
+  // Append active channel ID to every pulse request so the server can
+  // scope data to the correct channel when multi-channel is supported.
+  const channelId = localStorage.getItem('pulse_channel_id')
+  if (channelId) {
+    const sep = path.includes('?') ? '&' : '?'
+    path = `${path}${sep}channelId=${encodeURIComponent(channelId)}`
+  }
   return req(path, { ...opts, _base: PULSE_BASE })
 }
 

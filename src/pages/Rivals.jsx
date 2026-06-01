@@ -14,6 +14,7 @@ import { X, Play, Tv, Plus, Check } from 'lucide-react'
 import { rivals, pulse, competitors as competitorsApi } from '../api'
 import { fetchYouTubeRSS } from '../utils/youtube'
 import { useToast } from '../context/ToastContext'
+import { useActiveChannel } from '../context/ActiveChannelContext'
 
 // ── localStorage helpers ──────────────────────────────────────────────────────
 
@@ -36,6 +37,7 @@ function saveJSON(key, val) {
 // ── Main component ────────────────────────────────────────────────────────────
 
 export default function Rivals() {
+  const { activeChannel: switcherChannel } = useActiveChannel()
   const [tab, setTab] = useState(0) // 0=discover 1=activity
 
   const [tracked,   setTracked]   = useState(() => loadJSON(KEY_TRACKED))
@@ -43,8 +45,8 @@ export default function Rivals() {
   const [suggested, setSuggested] = useState(() => loadJSON(KEY_SUGGESTED))
   const [seen,      setSeen]      = useState(() => new Set(loadJSON(KEY_SEEN)))
 
-  // Channel ID resolution — localStorage first, then server profile fallback
-  const [channelId,        setChannelId]        = useState(() => localStorage.getItem('pulse_channel_id') || null)
+  // Channel ID — prefer context (kept in sync with switcher), fall back to localStorage
+  const [channelId, setChannelId] = useState(() => localStorage.getItem('pulse_channel_id') || null)
   const [channelIdLoading, setChannelIdLoading] = useState(false)
   const [channelIdMissing, setChannelIdMissing] = useState(false) // still unknown after profile fetch
 
@@ -67,6 +69,15 @@ export default function Rivals() {
   // In-app modals
   const [activeVideo,   setActiveVideo]   = useState(null) // { videoId, title, channelName }
   const [activeChannel, setActiveChannel] = useState(null) // tracked channel object
+
+  // Keep local channelId in sync with the context switcher
+  useEffect(() => {
+    if (switcherChannel?.channelId && switcherChannel.channelId !== channelId) {
+      setChannelId(switcherChannel.channelId)
+      setCompetitors(null)
+      setCompetitorsFetched(false)
+    }
+  }, [switcherChannel?.channelId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // On mount: if we don't have a channelId, ask the server for it
   useEffect(() => {

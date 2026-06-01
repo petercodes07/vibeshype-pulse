@@ -3,6 +3,7 @@ import { pulse } from '../api'
 import { BarChart2, Music2, Copy, Check, Trophy, TrendingUp, TrendingDown, BookOpen } from 'lucide-react'
 import HistoryFilters from '../components/HistoryFilters'
 import { getAllEntries } from '../utils/journal'
+import { useActiveChannel } from '../context/ActiveChannelContext'
 
 // ── Mock fallback data (used when server isn't available) ─────────────────────
 
@@ -68,6 +69,7 @@ const MOCK_HISTORY = [
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function PulseHistory() {
+  const { activeChannel } = useActiveChannel()
   const [history,    setHistory]    = useState(null)
   const [query,      setQuery]      = useState('')
   const [timeFilter, setTimeFilter] = useState('All time')
@@ -76,10 +78,11 @@ export default function PulseHistory() {
   const journalEntries = useMemo(() => getAllEntries(), [])
 
   useEffect(() => {
+    setHistory(null)
     pulse.history()
       .then(data => setHistory(data.picks ?? []))
       .catch(() => setHistory(MOCK_HISTORY))
-  }, [])
+  }, [activeChannel?.channelId])
 
   // Apply search + time + performance filters, then sort
   const items = useMemo(() => {

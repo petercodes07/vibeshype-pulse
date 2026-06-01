@@ -2,8 +2,10 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import PickCard from '../components/PickCard'
 import { pulse } from '../api'
 import { RefreshCw, Globe } from 'lucide-react'
+import { useActiveChannel } from '../context/ActiveChannelContext'
 
 export default function PulseToday() {
+  const { activeChannel } = useActiveChannel()
   const [picks,        setPicks]        = useState(null)
   const [opps,         setOpps]         = useState(null)   // opportunities
   const [refreshing,   setRefreshing]   = useState(false)
@@ -36,12 +38,14 @@ export default function PulseToday() {
   }, [])
 
   useEffect(() => {
+    setPicks(null)
+    setOpps(null)
     loadPicks()
     loadOpps()
     // poll every 60s while picks are empty
     pollRef.current = setInterval(() => loadPicks(), 60_000)
     return () => { if (pollRef.current) clearInterval(pollRef.current) }
-  }, [loadPicks, loadOpps])
+  }, [loadPicks, loadOpps, activeChannel?.channelId])
 
   function handleAction(id, action) {
     pulse.act(id, action).catch(() => {})

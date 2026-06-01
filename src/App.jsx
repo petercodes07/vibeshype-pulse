@@ -2,6 +2,7 @@ import { useState, useCallback } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { ToastProvider } from './context/ToastContext'
+import { ActiveChannelProvider } from './context/ActiveChannelContext'
 import useKeyboardShortcuts    from './hooks/useKeyboardShortcuts'
 import useCompetitorAlerts     from './hooks/useCompetitorAlerts'
 import AuthScreen from './pages/AuthScreen'
@@ -104,7 +105,9 @@ export default function App() {
       <BrowserRouter>
         <ToastProvider>
           <AuthProvider>
-            <Router />
+            <ActiveChannelProvider>
+              <Router />
+            </ActiveChannelProvider>
           </AuthProvider>
         </ToastProvider>
       </BrowserRouter>

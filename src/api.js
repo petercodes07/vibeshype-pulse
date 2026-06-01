@@ -116,6 +116,7 @@ export const pulse = USE_MOCK ? mockPulse : {
   peers:    ()                => pulseReq('/api/pulse/peers'),
   savePeers:(channelIds)      => pulseReq('/api/pulse/peers', { method: 'PUT', body: JSON.stringify({ channelIds }) }),
   today:    ()                => pulseReq('/api/pulse/today'),
-  act:      (recId, action)   => pulseReq(`/api/pulse/recommendations/${recId}/action`, { method: 'POST', body: JSON.stringify({ action }) }),
-  history:  ()                => pulseReq('/api/pulse/history'),
+  act:           (recId, action) => pulseReq(`/api/pulse/recommendations/${recId}/action`, { method: 'POST', body: JSON.stringify({ action }) }),
+  history:       ()              => pulseReq('/api/pulse/history'),
+  opportunities: ()              => pulseReq('/api/pulse/opportunities', { timeout: 20000 }),
 }

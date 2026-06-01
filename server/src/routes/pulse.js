@@ -303,6 +303,130 @@ pulseRouter.get('/history', (_req, res) => {
   res.json({ history: [] })
 })
 
+// GET /api/pulse/opportunities
+// Finds songs trending in other-language communities that haven't been
+// picked up by the user's peer niche yet (gap = opportunity).
+pulseRouter.get('/opportunities', async (_req, res) => {
+  if (!store.peers.length) return res.json({ opportunities: [] })
+
+  const LANG_TARGETS = [
+    { code: 'ar', label: 'Arabic'     },
+    { code: 'es', label: 'Spanish'    },
+    { code: 'pt', label: 'Portuguese' },
+    { code: 'fr', label: 'French'     },
+  ]
+
+  try {
+    // 1. Collect song titles from peer channels (last 5 videos each, up to 8 peers)
+    const batches = await Promise.all(
+      store.peers.slice(0, 8).map(id => getRecentVideosForPicks(id, 5))
+    )
+    const peerVideos = batches.flat()
+    if (!peerVideos.length) return res.json({ opportunities: [] })
+
+    // Dedupe by normalised title → track inside-niche usage
+    const titleMap = new Map()
+    for (const v of peerVideos) {
+      const key = normaliseTitle(v.title)
+      if (!titleMap.has(key)) titleMap.set(key, { videos: [], raw: v.title })
+      titleMap.get(key).videos.push(v)
+    }
+
+    // 2. For each title, search each target language and score the gap
+    const publishedAfter = new Date(Date.now() - 14 * 24 * 3600 * 1000).toISOString()
+
+    const scored = await Promise.all([...titleMap.entries()].slice(0, 15).map(async ([key, { videos, raw }]) => {
+      const peerCount  = videos.length
+      const insideViews = videos.reduce((a, v) => a + v.viewCount, 0)
+      const top = videos.sort((a, b) => b.viewCount - a.viewCount)[0]
+
+      let outsideViews = 0
+      const langHits = []
+
+      for (const lang of LANG_TARGETS) {
+        try {
+          const search = await ytGet('search', {
+            part: 'snippet',
+            type: 'video',
+            q: key,
+            order: 'viewCount',
+            maxResults: 10,
+            publishedAfter,
+            relevanceLanguage: lang.code,
+            videoCategoryId: '10',
+          })
+          const ids = (search.items ?? [])
+            .map(i => i.id?.videoId)
+            .filter(id => id && !videos.find(v => v.videoId === id))
+          if (!ids.length) continue
+
+          const details = await ytGet('videos', {
+            part: 'snippet,statistics',
+            id: ids.slice(0, 10).join(','),
+          })
+          const langViews = (details.items ?? []).reduce(
+            (a, v) => a + parseInt(v.statistics?.viewCount ?? '0', 10), 0
+          )
+          if (langViews > 0) {
+            outsideViews += langViews
+            langHits.push({ label: lang.label, views: langViews })
+          }
+        } catch (err) {
+          console.warn(`[pulse/opportunities] lang search failed (${lang.code}):`, err.message)
+        }
+      }
+
+      // Gap score: outside viral × inverse inside saturation
+      const saturation = Math.min(peerCount / 3, 1)          // 0–1 (3+ peers = fully saturated)
+      const gapScore   = outsideViews * (1 - saturation * 0.8)
+
+      return { key, raw, top, peerCount, insideViews, outsideViews, langHits, gapScore }
+    }))
+
+    // 3. Filter: must have meaningful outside signal + low inside saturation
+    const opportunities = scored
+      .filter(s => s.outsideViews >= 30_000 && s.peerCount <= 2)
+      .sort((a, b) => b.gapScore - a.gapScore)
+      .slice(0, 5)
+      .map(s => {
+        const topLangs = s.langHits
+          .sort((a, b) => b.views - a.views)
+          .slice(0, 2)
+          .map(l => l.label)
+
+        const langStr = topLangs.length
+          ? `Trending in ${topLangs.join(' & ')} (${formatViews(s.outsideViews)} views)`
+          : `${formatViews(s.outsideViews)} views outside your niche`
+
+        const peerStr = s.peerCount === 0
+          ? '— not posted by any peer yet.'
+          : `— only ${s.peerCount} peer${s.peerCount > 1 ? 's' : ''} in your niche have posted it.`
+
+        return {
+          id:                 s.top.videoId,
+          title:              s.top.title,
+          artist:             s.top.channelName,
+          cover:              s.top.thumbnail ?? null,
+          reason:             `${langStr} ${peerStr}`,
+          opportunityLanguages: topLangs,
+          outsideViews:       s.outsideViews,
+          insideViews:        s.insideViews,
+          gapScore:           Math.round(s.gapScore),
+          peerCount:          s.peerCount,
+          sources:            s.langHits
+            .sort((a, b) => b.views - a.views)
+            .map(l => ({ name: `${l.label} community`, views: l.views, avatar: null })),
+        }
+      })
+
+    console.log(`[pulse/opportunities] ${opportunities.length} gaps found from ${store.peers.length} peers`)
+    res.json({ opportunities })
+  } catch (err) {
+    console.error('[pulse/opportunities] Error:', err.message)
+    res.json({ opportunities: [] })
+  }
+})
+
 // POST /api/pulse/recommendations/:id/action  { action }
 pulseRouter.post('/recommendations/:id/action', (req, res) => {
   const { action } = req.body ?? {}

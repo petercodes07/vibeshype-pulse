@@ -1,10 +1,10 @@
 import { useState } from 'react'
-import { Music2, Flame, TrendingUp, Trophy, FileText, SlidersHorizontal, Check, X, ChevronDown, ChevronUp, Copy, BookOpen } from 'lucide-react'
+import { Music2, Flame, TrendingUp, Trophy, FileText, SlidersHorizontal, Check, X, ChevronDown, ChevronUp, Copy, BookOpen, Globe } from 'lucide-react'
 import { saveEntry } from '../utils/journal'
 
 const VARIANTS = ['original', 'slowed', 'sped-up', 'lyrics']
 
-export default function PickCard({ pick, rank, onAction }) {
+export default function PickCard({ pick, rank, onAction, opportunityBadge }) {
   const [expanded,   setExpanded]   = useState(false)
   const [step,       setStep]       = useState('idle')  // 'idle' | 'journal' | 'done'
   const [acted,      setActed]      = useState(false)
@@ -160,6 +160,11 @@ export default function PickCard({ pick, rank, onAction }) {
             )}
             {pick.variant && pick.variant !== 'original' && (
               <span className="signal-chip"><SlidersHorizontal size={12} strokeWidth={2} /> {pick.variant}</span>
+            )}
+            {opportunityBadge && (
+              <span className="signal-chip" style={{ background: 'rgba(160,80,255,0.15)', color: '#c084fc' }}>
+                <Globe size={12} strokeWidth={2} /> {opportunityBadge}
+              </span>
             )}
           </div>
 

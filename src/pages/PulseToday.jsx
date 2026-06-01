@@ -1,65 +1,12 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import PickCard from '../components/PickCard'
 import { pulse } from '../api'
-import { Search, RefreshCw } from 'lucide-react'
-
-const MOCK_PICKS = [
-  {
-    id: '1',
-    title: 'Die With A Smile',
-    artist: 'Lady Gaga & Bruno Mars',
-    cover: 'https://i.scdn.co/image/ab67616d0000b273f953f3a2b59e5e3bdd9bcc62',
-    reason: '4 peer channels in your niche posted this in the last 36 hours — it\'s hitting 2.8K views/hour across the cluster and still climbing.',
-    peerCount: 4,
-    viewsPerHour: 2800,
-    chartRank: 8,
-    lyricsAvailable: true,
-    variant: 'original',
-    sources: [
-      { name: 'LyricsVibes', views: 142000 },
-      { name: 'SoundWave Lyrics', views: 98000 },
-      { name: 'MusicBox Arabic', views: 67000 },
-      { name: 'TopHitsLyrics', views: 44000 },
-    ],
-  },
-  {
-    id: '2',
-    title: 'Espresso',
-    artist: 'Sabrina Carpenter',
-    cover: 'https://i.scdn.co/image/ab67616d0000b273e2e352d89826aef6dbd5ff8f',
-    reason: '2 top peers posted it yesterday and it\'s outperforming their channel median by 3.2×. Lyrics are synced on LRCLIB.',
-    peerCount: 2,
-    viewsPerHour: 1200,
-    chartRank: 22,
-    lyricsAvailable: true,
-    variant: 'original',
-    sources: [
-      { name: 'LyricsVibes', views: 89000 },
-      { name: 'HitSongLyrics', views: 51000 },
-    ],
-  },
-  {
-    id: '3',
-    title: 'APT.',
-    artist: 'ROSÉ & Bruno Mars',
-    cover: 'https://i.scdn.co/image/ab67616d0000b2739bbfd3a54a73522f2f38c9ef',
-    reason: 'Cross-genre breakout — 3 Arabic lyric channels and 2 global pop channels posted it this week. TikTok usage up 180% in 24h.',
-    peerCount: 3,
-    viewsPerHour: 3400,
-    chartRank: 5,
-    lyricsAvailable: true,
-    variant: 'slowed',
-    sources: [
-      { name: 'MusicBox Arabic', views: 210000 },
-      { name: 'SoundWave Lyrics', views: 178000 },
-      { name: 'LyricsVibes', views: 134000 },
-    ],
-  },
-]
+import { RefreshCw, Globe } from 'lucide-react'
 
 export default function PulseToday() {
-  const [picks, setPicks] = useState(null)
-  const [refreshing, setRefreshing] = useState(false)
+  const [picks,        setPicks]        = useState(null)
+  const [opps,         setOpps]         = useState(null)   // opportunities
+  const [refreshing,   setRefreshing]   = useState(false)
   const pollRef = useRef(null)
 
   const loadPicks = useCallback(async (showSpinner = false) => {
@@ -79,12 +26,22 @@ export default function PulseToday() {
     }
   }, [])
 
+  const loadOpps = useCallback(async () => {
+    try {
+      const data = await pulse.opportunities()
+      setOpps(data.opportunities ?? [])
+    } catch {
+      setOpps([])
+    }
+  }, [])
+
   useEffect(() => {
     loadPicks()
+    loadOpps()
     // poll every 60s while picks are empty
     pollRef.current = setInterval(() => loadPicks(), 60_000)
     return () => { if (pollRef.current) clearInterval(pollRef.current) }
-  }, [loadPicks])
+  }, [loadPicks, loadOpps])
 
   function handleAction(id, action) {
     pulse.act(id, action).catch(() => {})
@@ -95,6 +52,7 @@ export default function PulseToday() {
 
   return (
     <div className="screen">
+      {/* ── Header ── */}
       <div className="today-header">
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div>
@@ -102,7 +60,7 @@ export default function PulseToday() {
             <div className="today-title">Today's Picks</div>
           </div>
           <button
-            onClick={() => loadPicks(true)}
+            onClick={() => { loadPicks(true); loadOpps() }}
             disabled={refreshing || picks === null}
             style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', padding: 8, opacity: refreshing ? 0.4 : 1 }}
             title="Refresh picks"
@@ -119,16 +77,21 @@ export default function PulseToday() {
         </div>
       </div>
 
+      {/* ── Main picks ── */}
       {picks === null ? (
         <div className="loading-screen" style={{ height: 300 }}>
           <div className="spinner" />
           Analysing your peer channels…
         </div>
-      ) : mainPicks.length === 0 ? (
+      ) : displayPicks.length === 0 ? (
         <div className="picks-empty">
-          <div className="picks-empty-icon"><div className="spinner" style={{ width: 36, height: 36, borderWidth: 3 }} /></div>
+          <div className="picks-empty-icon">
+            <div className="spinner" style={{ width: 36, height: 36, borderWidth: 3 }} />
+          </div>
           <div className="picks-empty-title">Generating your picks…</div>
-          <p className="text-muted">Hang tight — we're analysing your peer channels right now. This page refreshes automatically.</p>
+          <p className="text-muted">
+            Hang tight — we're analysing your peer channels right now. This page refreshes automatically.
+          </p>
           <button
             className="btn-primary"
             style={{ marginTop: 16, maxWidth: 220 }}
@@ -143,6 +106,67 @@ export default function PulseToday() {
           <PickCard key={pick.id} pick={pick} rank={i + 1} onAction={handleAction} />
         ))
       )}
+
+      {/* ── Cross-language opportunities ── */}
+      <OpportunitiesSection opps={opps} onAction={handleAction} />
+    </div>
+  )
+}
+
+function OpportunitiesSection({ opps, onAction }) {
+  const [collapsed, setCollapsed] = useState(false)
+
+  // Don't render while loading or when empty
+  if (opps === null) return null
+  if (opps.length === 0) return null
+
+  return (
+    <div style={{ marginTop: 8, marginBottom: 8 }}>
+      {/* Section header */}
+      <button
+        onClick={() => setCollapsed(c => !c)}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 8,
+          width: '100%', padding: '10px 20px',
+          color: 'var(--light)', textAlign: 'left',
+        }}
+      >
+        <Globe size={15} strokeWidth={1.75} style={{ color: '#c084fc', flexShrink: 0 }} />
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 13, fontWeight: 700 }}>
+            Cross-language opportunities
+            <span style={{
+              marginLeft: 8, fontSize: 10, fontWeight: 700,
+              background: 'rgba(160,80,255,0.18)', color: '#c084fc',
+              padding: '2px 7px', borderRadius: 100,
+            }}>
+              {opps.length}
+            </span>
+          </div>
+          <div style={{ fontSize: 11, color: 'var(--gray)', marginTop: 1 }}>
+            Viral elsewhere — not yet posted in your niche
+          </div>
+        </div>
+        <span style={{ fontSize: 11, color: 'var(--gray)', flexShrink: 0 }}>
+          {collapsed ? '▼' : '▲'}
+        </span>
+      </button>
+
+      {/* Cards */}
+      {!collapsed && opps.map((opp, i) => {
+        const badge = opp.opportunityLanguages?.length
+          ? opp.opportunityLanguages.join(' & ')
+          : 'Cross-language'
+        return (
+          <PickCard
+            key={opp.id}
+            pick={opp}
+            rank={i + 1}
+            onAction={onAction}
+            opportunityBadge={badge}
+          />
+        )
+      })}
     </div>
   )
 }

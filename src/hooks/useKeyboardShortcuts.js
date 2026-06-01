@@ -8,6 +8,7 @@
  *   Ctrl/⌘ + 4   → History
  *   Ctrl/⌘ + 5   → Profile
  *   Ctrl/⌘ + ,   → Settings
+ *   Ctrl/⌘ + K   → Command palette
  *   ?             → Show shortcuts help
  *
  * Fires are suppressed when the user is typing in an input / textarea.
@@ -24,7 +25,7 @@ const ROUTES = {
   ',': '/pulse/settings',
 }
 
-export default function useKeyboardShortcuts(onShowHelp) {
+export default function useKeyboardShortcuts(onShowHelp, onShowPalette) {
   const navigate = useNavigate()
 
   const handler = useCallback((e) => {
@@ -33,6 +34,12 @@ export default function useKeyboardShortcuts(onShowHelp) {
     if (tag === 'INPUT' || tag === 'TEXTAREA' || e.target.isContentEditable) return
 
     const ctrl = e.ctrlKey || e.metaKey
+
+    if (ctrl && e.key === 'k') {
+      e.preventDefault()
+      onShowPalette?.()
+      return
+    }
 
     if (ctrl && ROUTES[e.key]) {
       e.preventDefault()
@@ -44,7 +51,7 @@ export default function useKeyboardShortcuts(onShowHelp) {
       e.preventDefault()
       onShowHelp()
     }
-  }, [navigate, onShowHelp])
+  }, [navigate, onShowHelp, onShowPalette])
 
   useEffect(() => {
     window.addEventListener('keydown', handler)

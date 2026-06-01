@@ -1,7 +1,8 @@
 import { useState, useEffect, useMemo } from 'react'
 import { pulse } from '../api'
-import { BarChart2, Music2, Copy, Check, Trophy, TrendingUp, TrendingDown } from 'lucide-react'
+import { BarChart2, Music2, Copy, Check, Trophy, TrendingUp, TrendingDown, BookOpen } from 'lucide-react'
 import HistoryFilters from '../components/HistoryFilters'
+import { getAllEntries } from '../utils/journal'
 
 // ── Mock fallback data (used when server isn't available) ─────────────────────
 
@@ -72,6 +73,7 @@ export default function PulseHistory() {
   const [timeFilter, setTimeFilter] = useState('All time')
   const [perfFilter, setPerfFilter] = useState('All')
   const [sort,       setSort]       = useState('recent')
+  const journalEntries = useMemo(() => getAllEntries(), [])
 
   useEffect(() => {
     pulse.history()
@@ -219,6 +221,7 @@ export default function PulseHistory() {
                   key={item.id}
                   item={item}
                   isBest={item.id === bestPick?.id}
+                  journal={journalEntries[item.id] ?? null}
                 />
               ))}
             </div>
@@ -231,7 +234,7 @@ export default function PulseHistory() {
 
 // ── History item ──────────────────────────────────────────────────────────────
 
-function HistoryItem({ item, isBest }) {
+function HistoryItem({ item, isBest, journal }) {
   const [coverFailed, setCoverFailed] = useState(false)
   const [copied,      setCopied]      = useState(false)
 
@@ -332,6 +335,34 @@ function HistoryItem({ item, isBest }) {
           <PerfBar label="24h" views={item.views24h} pct={pct24h} above={isAbove} />
           <PerfBar label="7d"  views={item.views7d}  pct={pct7d}  above={isAbove} />
           <PerfBar label="30d" views={item.views30d} pct={pct30d} above={isAbove} />
+        </div>
+      )}
+
+      {/* Journal note */}
+      {journal && (
+        <div style={{
+          padding: '8px 14px 12px',
+          borderTop: '1px solid var(--border)',
+          display: 'flex', alignItems: 'flex-start', gap: 7,
+        }}>
+          <BookOpen size={12} strokeWidth={1.75} style={{ color: 'var(--secondary)', flexShrink: 0, marginTop: 2 }} />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            {journal.variant && journal.variant !== 'original' && (
+              <span style={{
+                fontSize: 10, fontWeight: 700, textTransform: 'uppercase',
+                letterSpacing: '0.5px', color: 'var(--secondary)',
+                background: 'rgba(29,185,84,0.12)',
+                padding: '2px 6px', borderRadius: 100, marginRight: 6,
+              }}>
+                {journal.variant}
+              </span>
+            )}
+            {journal.note ? (
+              <span style={{ fontSize: 12, color: 'var(--muted)' }}>{journal.note}</span>
+            ) : (
+              <span style={{ fontSize: 12, color: 'var(--gray)', fontStyle: 'italic' }}>no note</span>
+            )}
+          </div>
         </div>
       )}
     </div>

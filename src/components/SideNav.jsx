@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react'
 import { NavLink } from 'react-router-dom'
-import { House, Music2, Swords, BarChart2, UserCircle, Settings, Keyboard } from 'lucide-react'
+import { House, Music2, Swords, BarChart2, CalendarDays, UserCircle, Settings, Keyboard } from 'lucide-react'
 
 const NAV_ITEMS = [
-  { to: '/pulse/home',        icon: House,     label: 'Home',        shortcut: '1' },
-  { to: '/pulse/today',       icon: Music2,    label: 'Today',       shortcut: '2' },
-  { to: '/pulse/competitors', icon: Swords,    label: 'Competitors', shortcut: '3' },
-  { to: '/pulse/history',     icon: BarChart2, label: 'History',     shortcut: '4' },
+  { to: '/pulse/home',        icon: House,        label: 'Home',        shortcut: '1'  },
+  { to: '/pulse/today',       icon: Music2,       label: 'Today',       shortcut: '2'  },
+  { to: '/pulse/competitors', icon: Swords,       label: 'Competitors', shortcut: '3'  },
+  { to: '/pulse/history',     icon: BarChart2,    label: 'History',     shortcut: '4'  },
+  { to: '/pulse/queue',       icon: CalendarDays, label: 'Queue',       shortcut: null },
 ]
 
 const BOTTOM_ITEMS = [

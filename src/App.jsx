@@ -16,8 +16,10 @@ import ConnectChannel from './pages/ConnectChannel'
 import Competitors from './pages/Competitors'
 import Rivals from './pages/Rivals'
 import Settings from './pages/Settings'
+import PickQueue from './pages/PickQueue'
 import SideNav from './components/SideNav'
 import ShortcutsModal from './components/ShortcutsModal'
+import CommandPalette from './components/CommandPalette'
 import ErrorBoundary from './components/ErrorBoundary'
 
 function Router() {
@@ -26,8 +28,11 @@ function Router() {
   const [showShortcuts, setShowShortcuts] = useState(false)
   const handleShowShortcuts = useCallback(() => setShowShortcuts(true), [])
 
+  const [showPalette, setShowPalette] = useState(false)
+  const handleShowPalette = useCallback(() => setShowPalette(true), [])
+
   // Register global keyboard shortcuts (harmless when logged out)
-  useKeyboardShortcuts(handleShowShortcuts)
+  useKeyboardShortcuts(handleShowShortcuts, handleShowPalette)
 
   // Smart competitor alerts — polls RSS every 20 min, no-ops when not logged in
   useCompetitorAlerts()
@@ -68,6 +73,7 @@ function Router() {
           <Route path="/pulse/peers"       element={<PulsePeers />} />
           <Route path="/pulse/competitors" element={<Rivals />} />
           <Route path="/pulse/history"     element={<PulseHistory />} />
+          <Route path="/pulse/queue"       element={<PickQueue />} />
           <Route path="/pulse/profile"     element={<Profile />} />
           <Route path="/pulse/settings"    element={<Settings />} />
           <Route path="/connect"           element={<ConnectChannel />} />
@@ -79,6 +85,14 @@ function Router() {
       {/* Global shortcuts modal */}
       {showShortcuts && (
         <ShortcutsModal onClose={() => setShowShortcuts(false)} />
+      )}
+
+      {/* Global command palette */}
+      {showPalette && (
+        <CommandPalette
+          onClose={() => setShowPalette(false)}
+          onShowShortcuts={handleShowShortcuts}
+        />
       )}
     </div>
   )

@@ -1,11 +1,18 @@
 import { useState } from 'react'
-import { Music2, Flame, TrendingUp, Trophy, FileText, SlidersHorizontal, Check, X, ChevronDown, ChevronUp, Copy } from 'lucide-react'
+import { Music2, Flame, TrendingUp, Trophy, FileText, SlidersHorizontal, Check, X, ChevronDown, ChevronUp, Copy, BookOpen } from 'lucide-react'
+import { saveEntry } from '../utils/journal'
+
+const VARIANTS = ['original', 'slowed', 'sped-up', 'lyrics']
 
 export default function PickCard({ pick, rank, onAction }) {
-  const [expanded, setExpanded] = useState(false)
-  const [acted, setActed] = useState(false)
+  const [expanded,   setExpanded]   = useState(false)
+  const [step,       setStep]       = useState('idle')  // 'idle' | 'journal' | 'done'
+  const [acted,      setActed]      = useState(false)
   const [coverFailed, setCoverFailed] = useState(false)
-  const [copied, setCopied] = useState(false)
+  const [copied,     setCopied]     = useState(false)
+  // journal state
+  const [note,       setNote]       = useState('')
+  const [variant,    setVariant]    = useState(pick?.variant ?? 'original')
 
   function handleCopy(e) {
     e.stopPropagation()
@@ -18,8 +25,20 @@ export default function PickCard({ pick, rank, onAction }) {
   if (!pick || acted) return null
 
   function handleAction(action) {
+    if (action === 'posted') {
+      // Open journal editor before dismissing
+      setStep('journal')
+      setExpanded(true)
+    } else {
+      setActed(true)
+      onAction?.(pick.id, action)
+    }
+  }
+
+  function submitJournal(skip = false) {
+    if (!skip) saveEntry(pick.id, note, variant)
+    onAction?.(pick.id, 'posted')
     setActed(true)
-    onAction?.(pick.id, action)
   }
 
   const showCover = pick.cover && !coverFailed
@@ -144,16 +163,74 @@ export default function PickCard({ pick, rank, onAction }) {
             )}
           </div>
 
-          {/* Actions */}
-          <div className="pick-actions">
-            <button className="btn-post" onClick={() => handleAction('posted')}>
-              <Check size={14} strokeWidth={2.5} /> Post it
-            </button>
-            <button className="btn-skip" onClick={() => handleAction('skipped')}>Skip</button>
-            <button className="btn-dismiss" onClick={() => handleAction('dismissed')}>
-              <X size={14} strokeWidth={2.5} /> Nope
-            </button>
-          </div>
+          {/* Actions / Journal editor */}
+          {step === 'journal' ? (
+            <div style={{ marginBottom: 12 }}>
+              <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.8px', color: 'var(--secondary)', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 5 }}>
+                <BookOpen size={11} strokeWidth={2} /> Quick journal
+              </div>
+              {/* Variant chips */}
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
+                {VARIANTS.map(v => (
+                  <button
+                    key={v}
+                    onClick={() => setVariant(v)}
+                    style={{
+                      padding: '4px 10px', borderRadius: 100, fontSize: 11, fontWeight: 700,
+                      background: variant === v ? 'rgba(29,185,84,0.18)' : 'var(--surface2)',
+                      color: variant === v ? 'var(--secondary)' : 'var(--gray)',
+                      border: `1.5px solid ${variant === v ? 'var(--secondary)' : 'transparent'}`,
+                      transition: 'all 0.12s',
+                    }}
+                  >
+                    {v}
+                  </button>
+                ))}
+              </div>
+              {/* Note textarea */}
+              <textarea
+                value={note}
+                onChange={e => setNote(e.target.value)}
+                placeholder="Add a note… (optional)"
+                rows={2}
+                style={{
+                  width: '100%', background: 'var(--surface2)',
+                  border: '1.5px solid var(--border)', borderRadius: 'var(--radius-sm)',
+                  color: 'var(--light)', fontSize: 13, fontFamily: 'inherit',
+                  padding: '9px 12px', resize: 'none', outline: 'none',
+                  lineHeight: 1.5, marginBottom: 10,
+                }}
+                onFocus={e => (e.target.style.borderColor = 'var(--secondary)')}
+                onBlur={e  => (e.target.style.borderColor = 'var(--border)')}
+              />
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button
+                  className="btn-post"
+                  style={{ flex: 1, background: 'var(--secondary)' }}
+                  onClick={() => submitJournal(false)}
+                >
+                  <Check size={14} strokeWidth={2.5} /> Save & post
+                </button>
+                <button
+                  className="btn-skip"
+                  style={{ flex: '0 0 auto', padding: '13px 16px', fontSize: 12 }}
+                  onClick={() => submitJournal(true)}
+                >
+                  Skip
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="pick-actions">
+              <button className="btn-post" onClick={() => handleAction('posted')}>
+                <Check size={14} strokeWidth={2.5} /> Post it
+              </button>
+              <button className="btn-skip" onClick={() => handleAction('skipped')}>Skip</button>
+              <button className="btn-dismiss" onClick={() => handleAction('dismissed')}>
+                <X size={14} strokeWidth={2.5} /> Nope
+              </button>
+            </div>
+          )}
 
           {/* Sources */}
           {pick.sources?.length > 0 && (

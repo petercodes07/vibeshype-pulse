@@ -1,3 +1,17 @@
+/**
+ * PulseHistory — Track Record
+ *
+ * #12: History is sourced from picks the user explicitly "posted"
+ *      (stored in localStorage via utils/journal.js) merged with any
+ *      server-side data from GET /api/pulse/history.  Client-side entries
+ *      take precedence and fill the gap while the server catches up.
+ *
+ * #13: PerfBar removed — replaced by a single inline multiplier bar per
+ *      card that shows the 7-day lift visually without 3 separate rows.
+ *      Sort is per time-window: sort by "lift" uses the selected window's
+ *      views/baseline rather than always 7d.
+ */
+
 import { useState, useEffect, useMemo } from 'react'
 import { pulse } from '../api'
 import { BarChart2, Music2, Copy, Check, Trophy, TrendingUp, TrendingDown, BookOpen } from 'lucide-react'
@@ -5,7 +19,7 @@ import HistoryFilters from '../components/HistoryFilters'
 import { getAllEntries } from '../utils/journal'
 import { useActiveChannel } from '../context/ActiveChannelContext'
 
-// ── Mock fallback data (used when server isn't available) ─────────────────────
+// ── Mock fallback ─────────────────────────────────────────────────────────────
 
 const MOCK_HISTORY = [
   {
@@ -31,69 +45,95 @@ const MOCK_HISTORY = [
   },
   {
     id: 'h4', title: 'Cruel Summer', artist: 'Taylor Swift',
-    cover: null,
-    postedAt: '2026-05-14',
+    cover: null, postedAt: '2026-05-14',
     views24h: 18400, views7d: 142000, views30d: 380000,
     baseline24h: 8200, baseline7d: 61000, baseline30d: 160000,
   },
   {
     id: 'h5', title: 'As It Was', artist: 'Harry Styles',
-    cover: null,
-    postedAt: '2026-05-09',
+    cover: null, postedAt: '2026-05-09',
     views24h: 9100, views7d: 78000, views30d: 201000,
     baseline24h: 8200, baseline7d: 61000, baseline30d: 160000,
   },
   {
     id: 'h6', title: 'Flowers', artist: 'Miley Cyrus',
-    cover: null,
-    postedAt: '2026-05-04',
+    cover: null, postedAt: '2026-05-04',
     views24h: 7800, views7d: 65000, views30d: 174000,
     baseline24h: 8200, baseline7d: 61000, baseline30d: 160000,
   },
   {
     id: 'h7', title: 'Blinding Lights', artist: 'The Weeknd',
-    cover: null,
-    postedAt: '2026-04-28',
+    cover: null, postedAt: '2026-04-28',
     views24h: 7200, views7d: 54000, views30d: 130000,
     baseline24h: 8200, baseline7d: 61000, baseline30d: 160000,
   },
   {
     id: 'h8', title: 'Levitating', artist: 'Dua Lipa',
-    cover: null,
-    postedAt: '2026-04-22',
+    cover: null, postedAt: '2026-04-22',
     views24h: 5100, views7d: 38000, views30d: 95000,
     baseline24h: 8200, baseline7d: 61000, baseline30d: 160000,
   },
 ]
 
+// ── Window helper — maps timeFilter to views/baseline keys ───────────────────
+
+function windowKeys(timeFilter) {
+  if (timeFilter === 'Last 7 days')  return { v: 'views7d',  b: 'baseline7d'  }
+  if (timeFilter === 'Last 30 days') return { v: 'views30d', b: 'baseline30d' }
+  return                                    { v: 'views7d',  b: 'baseline7d'  } // default
+}
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function PulseHistory() {
   const { activeChannel } = useActiveChannel()
-  const [history,    setHistory]    = useState(null)
-  const [query,      setQuery]      = useState('')
-  const [timeFilter, setTimeFilter] = useState('All time')
-  const [perfFilter, setPerfFilter] = useState('All')
-  const [sort,       setSort]       = useState('recent')
+  const [serverHistory, setServerHistory] = useState(null)
+  const [query,         setQuery]         = useState('')
+  const [timeFilter,    setTimeFilter]    = useState('All time')
+  const [perfFilter,    setPerfFilter]    = useState('All')
+  const [sort,          setSort]          = useState('recent')
   const journalEntries = useMemo(() => getAllEntries(), [])
 
   useEffect(() => {
-    setHistory(null)
+    setServerHistory(null)
     pulse.history()
-      .then(data => setHistory(data.picks ?? []))
-      .catch(() => setHistory(MOCK_HISTORY))
+      .then(data => setServerHistory(data.picks ?? []))
+      .catch(() => setServerHistory(MOCK_HISTORY))
   }, [activeChannel?.channelId])
 
-  // Apply search + time + performance filters, then sort
+  // #12 — merge server history with locally-posted picks from the journal.
+  // Journal entries keyed by pick ID represent user-confirmed "posted" actions.
+  // Build stub history items for any journal entries not yet reflected server-side.
+  const history = useMemo(() => {
+    if (serverHistory === null) return null
+    const serverIds = new Set((serverHistory).map(h => h.id))
+    const localStubs = Object.entries(journalEntries)
+      .filter(([id]) => !serverIds.has(id))
+      .map(([id, entry]) => ({
+        id,
+        title:     entry.title    ?? id,
+        artist:    entry.artist   ?? '',
+        cover:     entry.cover    ?? null,
+        postedAt:  entry.savedAt  ?? new Date().toISOString(),
+        // no view data yet — server hasn't caught up
+      }))
+    return [...serverHistory, ...localStubs]
+  }, [serverHistory, journalEntries])
+
+  // #13 — sort uses the active time window's views/baseline, not always 7d
+  const wk = windowKeys(timeFilter)
+
   const items = useMemo(() => {
+    if (!history) return []
     const now = Date.now()
     const q = query.trim().toLowerCase()
-    const filtered = (history ?? []).filter(h => {
-      if (timeFilter === 'Last 7 days'  && now - new Date(h.postedAt).getTime() > 7  * 86_400_000) return false
-      if (timeFilter === 'Last 30 days' && now - new Date(h.postedAt).getTime() > 30 * 86_400_000) return false
+    const filtered = history.filter(h => {
+      const ts = new Date(h.postedAt).getTime()
+      if (timeFilter === 'Last 7 days'  && now - ts > 7  * 86_400_000) return false
+      if (timeFilter === 'Last 30 days' && now - ts > 30 * 86_400_000) return false
       if (perfFilter !== 'All') {
-        const mult = h.baseline7d ? h.views7d / h.baseline7d : null
-        if (mult == null) return false
+        const mult = h[wk.b] ? h[wk.v] / h[wk.b] : null
+        if (mult == null)                                  return false
         if (perfFilter === 'Above baseline' && mult <  1) return false
         if (perfFilter === 'Below baseline' && mult >= 1) return false
       }
@@ -106,27 +146,29 @@ export default function PulseHistory() {
 
     const sorted = [...filtered]
     if (sort === 'lift') {
+      // #13: lift sorts by the active window
       sorted.sort((a, b) =>
-        (b.views7d / (b.baseline7d || 1)) - (a.views7d / (a.baseline7d || 1))
+        (b[wk.v] / (b[wk.b] || 1)) - (a[wk.v] / (a[wk.b] || 1))
       )
     } else if (sort === 'views') {
-      sorted.sort((a, b) => (b.views7d ?? 0) - (a.views7d ?? 0))
+      sorted.sort((a, b) => ((b[wk.v] ?? 0) - (a[wk.v] ?? 0)))
     } else if (sort === 'oldest') {
       sorted.sort((a, b) => new Date(a.postedAt) - new Date(b.postedAt))
     } else {
       sorted.sort((a, b) => new Date(b.postedAt) - new Date(a.postedAt))
     }
     return sorted
-  }, [history, query, timeFilter, perfFilter, sort])
+  }, [history, query, timeFilter, perfFilter, sort, wk])
 
   const filtersActive = query.length > 0 || timeFilter !== 'All time' || perfFilter !== 'All'
 
-  // Stats
-  const avgMultiplier = items.length
-    ? (items.reduce((s, h) => s + (h.views7d / (h.baseline7d || 1)), 0) / items.length).toFixed(1)
+  // Stats — use active window
+  const avgMultiplier = items.filter(h => h[wk.b]).length
+    ? (items.filter(h => h[wk.b]).reduce((s, h) => s + h[wk.v] / h[wk.b], 0) / items.filter(h => h[wk.b]).length).toFixed(1)
     : '—'
-  const totalViews = items.reduce((s, h) => s + (h.views7d || 0), 0)
-  const bestPick   = items.reduce((best, h) => (h.views7d > (best?.views7d ?? 0) ? h : best), null)
+  const totalViews = items.reduce((s, h) => s + (h[wk.v] || 0), 0)
+  const bestPick   = items.reduce((best, h) =>
+    (h[wk.v] ?? 0) > (best?.[wk.v] ?? 0) ? h : best, null)
 
   return (
     <div className="screen">
@@ -134,39 +176,38 @@ export default function PulseHistory() {
       {/* ── Header ── */}
       <div className="section-header">
         <div className="section-title">Track Record</div>
-        <div className="section-sub">How your posted picks performed vs your baseline.</div>
+        <div className="section-sub">Performance of every pick you've posted.</div>
       </div>
 
       {history === null ? (
         <div className="loading-screen" style={{ height: 300 }}>
           <div className="spinner" />
         </div>
-      ) : (history ?? []).length === 0 ? (
-
-        /* ── Empty state ── */
+      ) : history.length === 0 ? (
         <div style={{ margin: '40px 20px', textAlign: 'center', color: 'var(--gray)' }}>
           <div style={{ marginBottom: 12 }}>
             <BarChart2 size={48} strokeWidth={1.25} style={{ color: 'var(--muted)' }} />
           </div>
           <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--light)', marginBottom: 6 }}>
-            No results yet
+            No picks posted yet
           </div>
           <div style={{ fontSize: 13 }}>
-            Accept a pick and post it — results appear here after 24 hours.
+            Hit "Post it" on any Today's pick — it'll show up here.
           </div>
         </div>
-
       ) : (
         <>
           {/* ── Stats row ── */}
           <div className="stat-row">
             <div className="stat-box">
               <div className="stat-value">{avgMultiplier}×</div>
-              <div className="stat-label">Avg 7-day lift</div>
+              <div className="stat-label">
+                Avg lift · {timeFilter === 'All time' ? '7d' : timeFilter === 'Last 7 days' ? '7d' : '30d'}
+              </div>
             </div>
             <div className="stat-box">
               <div className="stat-value">{fmtK(totalViews)}</div>
-              <div className="stat-label">Total views (7d)</div>
+              <div className="stat-label">Total views</div>
             </div>
             <div className="stat-box">
               <div className="stat-value">{items.length}</div>
@@ -175,7 +216,7 @@ export default function PulseHistory() {
           </div>
 
           {/* ── Best performer callout ── */}
-          {bestPick && (
+          {bestPick && bestPick[wk.v] > 0 && (
             <div style={{
               margin: '0 16px 14px',
               background: 'linear-gradient(135deg, rgba(255,200,50,0.1), rgba(255,59,59,0.06))',
@@ -196,9 +237,12 @@ export default function PulseHistory() {
               </div>
               <div style={{ textAlign: 'right', flexShrink: 0 }}>
                 <div style={{ fontSize: 18, fontWeight: 800, color: '#ffc832' }}>
-                  {(bestPick.views7d / (bestPick.baseline7d || 1)).toFixed(1)}×
+                  {bestPick[wk.b] ? (bestPick[wk.v] / bestPick[wk.b]).toFixed(1) : fmtK(bestPick[wk.v])}
+                  {bestPick[wk.b] ? '×' : ' views'}
                 </div>
-                <div style={{ fontSize: 10, color: 'var(--muted)' }}>7-day lift</div>
+                <div style={{ fontSize: 10, color: 'var(--muted)' }}>
+                  {timeFilter === 'Last 30 days' ? '30d' : '7d'} lift
+                </div>
               </div>
             </div>
           )}
@@ -215,16 +259,17 @@ export default function PulseHistory() {
           {/* ── History list ── */}
           {items.length === 0 ? (
             <div style={{ margin: '32px 16px', textAlign: 'center', color: 'var(--gray)', fontSize: 13 }}>
-              {filtersActive ? 'No picks match your filters.' : 'No picks in this time period.'}
+              {filtersActive ? 'No picks match your filters.' : 'No picks in this period.'}
             </div>
           ) : (
             <div className="history-list">
-              {items.map((item, i) => (
+              {items.map(item => (
                 <HistoryItem
                   key={item.id}
                   item={item}
                   isBest={item.id === bestPick?.id}
                   journal={journalEntries[item.id] ?? null}
+                  windowKeys={wk}
                 />
               ))}
             </div>
@@ -237,15 +282,16 @@ export default function PulseHistory() {
 
 // ── History item ──────────────────────────────────────────────────────────────
 
-function HistoryItem({ item, isBest, journal }) {
+function HistoryItem({ item, isBest, journal, windowKeys: wk }) {
   const [coverFailed, setCoverFailed] = useState(false)
   const [copied,      setCopied]      = useState(false)
 
-  const mult7d  = item.baseline7d ? (item.views7d  / item.baseline7d)  : null
-  const pct24h  = item.baseline24h ? Math.min((item.views24h / item.baseline24h) * 50, 100) : 0
-  const pct7d   = item.baseline7d  ? Math.min((item.views7d  / item.baseline7d)  * 50, 100) : 0
-  const pct30d  = item.baseline30d ? Math.min((item.views30d / item.baseline30d) * 50, 100) : 0
-  const isAbove = mult7d != null && mult7d >= 1.0
+  const views   = item[wk.v] ?? null
+  const base    = item[wk.b] ?? null
+  const mult    = base && views != null ? views / base : null
+  const isAbove = mult != null && mult >= 1.0
+  // #13 — single bar width: 50% = baseline, scale linearly up to 100% at 2× baseline
+  const barPct  = base && views != null ? Math.min((views / base) * 50, 100) : 0
   const showCover = item.cover && !coverFailed
 
   function handleCopy(e) {
@@ -303,16 +349,22 @@ function HistoryItem({ item, isBest, journal }) {
 
         {/* Multiplier + copy */}
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6, flexShrink: 0 }}>
-          {mult7d != null && (
+          {mult != null ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
               {isAbove
-                ? <TrendingUp  size={13} strokeWidth={2} color="var(--secondary)" />
+                ? <TrendingUp   size={13} strokeWidth={2} color="var(--secondary)" />
                 : <TrendingDown size={13} strokeWidth={2} color="var(--primary)" />
               }
               <span style={{ fontSize: 15, fontWeight: 800, color: isAbove ? 'var(--secondary)' : 'var(--primary)' }}>
-                {mult7d.toFixed(1)}×
+                {mult.toFixed(1)}×
               </span>
             </div>
+          ) : views != null ? (
+            <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--muted)' }}>
+              {fmtK(views)}
+            </span>
+          ) : (
+            <span style={{ fontSize: 11, color: 'var(--gray)', fontStyle: 'italic' }}>pending</span>
           )}
           <button
             onClick={handleCopy}
@@ -332,19 +384,33 @@ function HistoryItem({ item, isBest, journal }) {
         </div>
       </div>
 
-      {/* Performance bars */}
-      {item.views24h != null && (
-        <div className="history-perf">
-          <PerfBar label="24h" views={item.views24h} pct={pct24h} above={isAbove} />
-          <PerfBar label="7d"  views={item.views7d}  pct={pct7d}  above={isAbove} />
-          <PerfBar label="30d" views={item.views30d} pct={pct30d} above={isAbove} />
+      {/* #13 — single inline multiplier bar (replaces 3-row PerfBar) */}
+      {views != null && (
+        <div style={{ padding: '8px 14px 12px', borderTop: '1px solid var(--border)' }}>
+          <div style={{
+            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+            fontSize: 10, color: 'var(--gray)', marginBottom: 5,
+          }}>
+            <span>{fmtK(views)} views</span>
+            {base && <span style={{ color: isAbove ? 'var(--secondary)' : 'var(--primary)' }}>
+              {isAbove ? '+' : ''}{((mult - 1) * 100).toFixed(0)}% vs baseline
+            </span>}
+          </div>
+          <div style={{ height: 5, background: 'var(--border)', borderRadius: 3, overflow: 'hidden' }}>
+            <div style={{
+              height: '100%', borderRadius: 3,
+              width: `${barPct}%`,
+              background: isAbove ? 'var(--secondary)' : 'var(--primary)',
+              transition: 'width 0.6s ease',
+            }} />
+          </div>
         </div>
       )}
 
       {/* Journal note */}
       {journal && (
         <div style={{
-          padding: '8px 14px 12px',
+          padding: '6px 14px 10px',
           borderTop: '1px solid var(--border)',
           display: 'flex', alignItems: 'flex-start', gap: 7,
         }}>
@@ -360,31 +426,13 @@ function HistoryItem({ item, isBest, journal }) {
                 {journal.variant}
               </span>
             )}
-            {journal.note ? (
-              <span style={{ fontSize: 12, color: 'var(--muted)' }}>{journal.note}</span>
-            ) : (
-              <span style={{ fontSize: 12, color: 'var(--gray)', fontStyle: 'italic' }}>no note</span>
-            )}
+            {journal.note
+              ? <span style={{ fontSize: 12, color: 'var(--muted)' }}>{journal.note}</span>
+              : <span style={{ fontSize: 12, color: 'var(--gray)', fontStyle: 'italic' }}>no note</span>
+            }
           </div>
         </div>
       )}
-    </div>
-  )
-}
-
-function PerfBar({ label, views, pct, above }) {
-  return (
-    <div className="perf-bar-wrap" style={{ marginBottom: 6 }}>
-      <div className="perf-bar-label">
-        <span>{label}</span>
-        <span style={{ color: 'var(--light)', fontWeight: 600 }}>{fmtK(views)}</span>
-      </div>
-      <div className="perf-bar-track">
-        <div
-          className={`perf-bar-fill${above ? '' : ' below'}`}
-          style={{ width: `${pct}%` }}
-        />
-      </div>
     </div>
   )
 }
@@ -400,7 +448,8 @@ function fmtK(n) {
 
 function formatDate(iso) {
   if (!iso) return ''
-  return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+  const d = new Date(iso)
+  return isNaN(d) ? '' : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
 
 const GRADIENTS = [

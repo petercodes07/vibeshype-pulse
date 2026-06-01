@@ -553,17 +553,6 @@ button { cursor: pointer; font-family: inherit; border: none; background: none; 
 .history-title-text { font-size: 14px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .history-artist-text { font-size: 12px; color: var(--muted); margin-top: 2px; }
 .history-date { font-size: 11px; color: var(--gray); margin-top: 4px; }
-.history-perf {
-  padding: 10px 14px 14px;
-  border-top: 1px solid var(--border);
-}
-.history-perf-row { display: flex; gap: 8px; align-items: center; }
-.perf-bar-wrap { flex: 1; }
-.perf-bar-label { font-size: 10px; color: var(--gray); margin-bottom: 4px; display: flex; justify-content: space-between; }
-.perf-bar-track { height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; }
-.perf-bar-fill { height: 100%; background: var(--secondary); border-radius: 3px; transition: width 0.6s ease; }
-.perf-bar-fill.below { background: var(--primary); }
-.history-multiplier { font-size: 13px; font-weight: 700; color: var(--secondary); text-align: right; min-width: 44px; }
 
 /* ── Peers management ── */
 .section-header { padding: 20px 20px 4px; }

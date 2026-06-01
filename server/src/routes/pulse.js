@@ -198,6 +198,66 @@ pulseRouter.get('/profile', (_req, res) => {
   res.json({ channelId: null, channelName: null })
 })
 
+/**
+ * GET /api/pulse/discover?channelId=UCxxx
+ *
+ * Niche-aware channel discovery (#14).
+ * Re-uses the onboard AI analysis to derive search queries from the
+ * user's actual content, then searches YouTube for channels posting
+ * the same type of content. Returns up to 15 ranked suggestions,
+ * excluding channels already saved as peers.
+ *
+ * Response: { suggestions: [{ channelId, name, subs, avatar, relevance }] }
+ */
+pulseRouter.get('/discover', async (req, res) => {
+  const { channelId } = req.query
+  if (!channelId) return res.status(400).json({ error: 'channelId is required' })
+
+  try {
+    // 1. Fetch channel metadata + recent videos
+    const meta     = await fetchChannelMeta(channelId)
+    const videoIds = await fetchLatestVideoIds(channelId, 10)
+    const videos   = await fetchVideoDetails(videoIds)
+
+    // 2. AI niche analysis (reuses existing analyseChannel function)
+    const analysis = await analyseChannel(meta, videos)
+    console.log(`[pulse/discover] Niche: ${analysis.format} / queries: ${analysis.searchQueries?.join(' | ')}`)
+
+    // 3. Find competitor channels via the same search logic as onboard
+    const all = await findCompetitorChannels(analysis.searchQueries ?? [], channelId)
+
+    // 4. Exclude channels already saved as peers
+    const peerSet   = new Set(store.peers)
+    const suggested = all
+      .filter(ch => !peerSet.has(ch.channelId))
+      .slice(0, 15)
+      .map((ch, i) => ({
+        ...ch,
+        // Rank as relevance score 1.0 → 0.0 descending
+        relevance: parseFloat((1 - i / Math.max(suggested?.length ?? 15, 15)).toFixed(2)),
+        niche:     analysis.format,
+        genres:    analysis.genres ?? [],
+      }))
+
+    // fix self-referential relevance calc — recompute after filter
+    const withRelevance = all
+      .filter(ch => !peerSet.has(ch.channelId))
+      .slice(0, 15)
+      .map((ch, i, arr) => ({
+        ...ch,
+        relevance: parseFloat((1 - i / Math.max(arr.length, 1)).toFixed(2)),
+        niche:     analysis.format,
+        genres:    analysis.genres ?? [],
+      }))
+
+    console.log(`[pulse/discover] ${withRelevance.length} suggestions for ${channelId}`)
+    res.json({ suggestions: withRelevance, niche: analysis.format, genres: analysis.genres })
+  } catch (err) {
+    console.error('[pulse/discover] Error:', err.message)
+    res.status(502).json({ error: err.message })
+  }
+})
+
 // GET /api/pulse/peers
 pulseRouter.get('/peers', (_req, res) => {
   res.json({ peers: store.peers })

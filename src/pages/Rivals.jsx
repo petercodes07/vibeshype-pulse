@@ -97,15 +97,29 @@ export default function Rivals() {
       .finally(() => setChannelIdLoading(false))
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Fetch real AI competitors when Discover tab opens and we have a channelId
+  // #14 — niche-aware discovery: swap competitorsApi.list → pulse.discover
   useEffect(() => {
     if (tab !== 0) return
     if (!channelId) return
     if (competitorsFetched) return // don't re-fetch on every tab visit
     setCompetitors(null)
     setCompetitorsError(null)
-    competitorsApi.list(channelId)
-      .then(data => { setCompetitors(data.competitors ?? []); setCompetitorsFetched(true) })
+    pulse.discover(channelId)
+      .then(data => {
+        // pulse.discover returns { suggestions, niche, genres }
+        // map to the same shape Rivals already renders: { id, name, subs, avatar, score, reason }
+        const mapped = (data.suggestions ?? []).map(s => ({
+          id:           s.channelId,
+          name:         s.name,
+          subs:         s.subs,
+          avatar:       s.avatar,
+          score:        s.relevance,
+          reason:       s.genres?.length ? `${s.niche} · ${s.genres.join(', ')}` : s.niche,
+          channelId:    s.channelId,
+        }))
+        setCompetitors(mapped)
+        setCompetitorsFetched(true)
+      })
       .catch(err => { setCompetitorsError(err.message); setCompetitorsFetched(true) })
   }, [tab, channelId]) // eslint-disable-line react-hooks/exhaustive-deps
 

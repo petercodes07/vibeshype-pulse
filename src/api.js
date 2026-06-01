@@ -126,4 +126,5 @@ export const pulse = USE_MOCK ? mockPulse : {
   act:           (recId, action) => pulseReq(`/api/pulse/recommendations/${recId}/action`, { method: 'POST', body: JSON.stringify({ action }) }),
   history:       ()              => pulseReq('/api/pulse/history'),
   opportunities: ()              => pulseReq('/api/pulse/opportunities', { timeout: 20000 }),
+  discover:      (channelId)     => pulseReq(`/api/pulse/discover?channelId=${encodeURIComponent(channelId)}`, { timeout: 30000 }),
 }

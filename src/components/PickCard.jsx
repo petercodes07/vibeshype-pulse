@@ -1,6 +1,7 @@
 import { useState } from 'react'
-import { Music2, Flame, TrendingUp, Trophy, FileText, SlidersHorizontal, Check, X, ChevronDown, ChevronUp, Copy, BookOpen, Globe } from 'lucide-react'
+import { Music2, Flame, TrendingUp, Trophy, FileText, SlidersHorizontal, Check, X, ChevronDown, ChevronUp, Copy, BookOpen, Globe, Play } from 'lucide-react'
 import { saveEntry } from '../utils/journal'
+import VideoModal from './VideoModal'
 
 const VARIANTS = ['original', 'slowed', 'sped-up', 'lyrics']
 
@@ -10,6 +11,7 @@ export default function PickCard({ pick, rank, onAction, opportunityBadge }) {
   const [acted,      setActed]      = useState(false)
   const [coverFailed, setCoverFailed] = useState(false)
   const [copied,     setCopied]     = useState(false)
+  const [videoOpen,  setVideoOpen]  = useState(false)
   // journal state
   const [note,       setNote]       = useState('')
   const [variant,    setVariant]    = useState(pick?.variant ?? 'original')
@@ -44,6 +46,14 @@ export default function PickCard({ pick, rank, onAction, opportunityBadge }) {
   const showCover = pick.cover && !coverFailed
 
   return (
+    <>
+    {videoOpen && (
+      <VideoModal
+        videoId={pick.id}
+        title={pick.title}
+        onClose={() => setVideoOpen(false)}
+      />
+    )}
     <div className="pick-card" style={{ margin: '0 16px 8px' }}>
 
       {/* ── Collapsed row ── */}
@@ -111,8 +121,26 @@ export default function PickCard({ pick, rank, onAction, opportunityBadge }) {
           </div>
         </div>
 
-        {/* Copy + Chevron */}
+        {/* Play + Copy + Chevron */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+          {/* Play button — only shown when pick.id is a real YouTube video ID */}
+          {pick.id && !pick.id.startsWith('mock') && (
+            <button
+              onClick={e => { e.stopPropagation(); setVideoOpen(true) }}
+              title="Preview on YouTube"
+              style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                width: 28, height: 28, borderRadius: '50%',
+                background: 'var(--primary)',
+                color: '#fff', flexShrink: 0,
+                transition: 'opacity 0.15s',
+              }}
+              onMouseEnter={e => (e.currentTarget.style.opacity = '0.8')}
+              onMouseLeave={e => (e.currentTarget.style.opacity = '1')}
+            >
+              <Play size={11} strokeWidth={2.5} style={{ marginLeft: 1 }} />
+            </button>
+          )}
           <button
             onClick={handleCopy}
             title="Copy song title"
@@ -255,6 +283,7 @@ export default function PickCard({ pick, rank, onAction, opportunityBadge }) {
         </div>
       )}
     </div>
+    </>
   )
 }
 

@@ -14,7 +14,8 @@
     "electron:build": "vite build && electron-builder",
     "cap:sync": "cap sync",
     "cap:ios": "cap open ios",
-    "cap:android": "cap open android"
+    "cap:android": "cap open android",
+    "start": "npm --prefix server start"
   },
   "dependencies": {
     "@capacitor/android": "^6.0.0",
@@ -60,5 +61,8 @@
     "linux": {
       "target": "AppImage"
     }
+  },
+  "engines": {
+    "node": ">=22.12.0"
   }
 }

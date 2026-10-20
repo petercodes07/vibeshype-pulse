@@ -49,6 +49,6 @@ competitorsRouter.get('/', async (req, res) => {
     })
   } catch (err) {
     console.error('[competitors] Error:', err.message)
-    res.status(500).json({ error: err.message })
+    res.json({ channel: null, competitors: [], indexed: false })
   }
 })

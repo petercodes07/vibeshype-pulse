@@ -1,10 +1,16 @@
-import pg from 'pg'
 import 'dotenv/config'
 
-const { Pool } = pg
+export const databaseKind = process.env.DATABASE_URL ? 'postgres' : 'sqlite'
 
-export const pool = new Pool({ connectionString: process.env.DATABASE_URL })
+async function createPool() {
+  if (databaseKind === 'postgres') {
+    const { default: pg } = await import('pg')
+    const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL })
+    pool.on('error', err => console.error('[db] Unexpected pool error', err.message))
+    return pool
+  }
+  const { createSqlitePool } = await import('./sqlite.js')
+  return createSqlitePool(process.env.SQLITE_PATH || './data/pulse.sqlite')
+}
 
-pool.on('error', (err) => {
-  console.error('[db] Unexpected pool error', err.message)
-})
+export const pool = await createPool()

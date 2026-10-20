@@ -17,7 +17,7 @@
  */
 
 import { Router } from 'express'
-import { pool } from '../db/pool.js'
+import { pool, databaseKind } from '../db/pool.js'
 import {
   parseInput,
   resolveChannelId,
@@ -74,10 +74,10 @@ youtubeRouter.post('/connect', async (req, res) => {
 
       await client.query(
         `INSERT INTO channels (id, handle, name, description, thumbnail_url, subscriber_count, video_count, country, fetched_at)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,NOW())
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,CURRENT_TIMESTAMP)
          ON CONFLICT (id) DO UPDATE SET
            name=$3, description=$4, thumbnail_url=$5,
-           subscriber_count=$6, video_count=$7, country=$8, fetched_at=NOW()`,
+           subscriber_count=$6, video_count=$7, country=$8, fetched_at=CURRENT_TIMESTAMP`,
         [meta.id, meta.handle, meta.name, meta.description,
          meta.thumbnail_url, meta.subscriber_count, meta.video_count, meta.country],
       )
@@ -88,7 +88,7 @@ youtubeRouter.post('/connect', async (req, res) => {
            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
            ON CONFLICT (id) DO UPDATE SET
              title=$3, description=$4, transcript=$5, combined_text=$6,
-             view_count=$7, like_count=$8, comment_count=$9, fetched_at=NOW()`,
+             view_count=$7, like_count=$8, comment_count=$9, fetched_at=CURRENT_TIMESTAMP`,
           [v.id, channelId, v.title, v.description, v.transcript, v.combined_text,
            v.view_count, v.like_count, v.comment_count, v.duration, v.published_at],
         )
@@ -103,11 +103,11 @@ youtubeRouter.post('/connect', async (req, res) => {
     }
     console.log(`[connect] Saved channel + ${videos.length} videos`)
 
-    // ── 8. Embed ─────────────────────────────────────────────────────────────
-    await embedChannel(channelId, channelCombinedText)
-
-    // ── 9. Find competitors ──────────────────────────────────────────────────
-    const competitors = await buildRecommendations({ ...meta, description: meta.description })
+    let competitors = []
+    if (databaseKind === 'postgres' && process.env.OPENAI_API_KEY) {
+      await embedChannel(channelId, channelCombinedText)
+      competitors = await buildRecommendations({ ...meta })
+    }
 
     // ── 10. Respond ──────────────────────────────────────────────────────────
     res.json({ channel: meta, competitors })

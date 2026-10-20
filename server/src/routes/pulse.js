@@ -8,6 +8,30 @@
 
 import { Router } from 'express'
 import Anthropic from '@anthropic-ai/sdk'
+
+// ── Rate limiter (per-IP, in-memory) ─────────────────────────────────────────
+const rateLimits = new Map() // ip → { count, resetAt }
+function rateLimit(maxPerMinute) {
+  return (req, res, next) => {
+    const ip = req.ip || req.socket.remoteAddress || 'unknown'
+    const now = Date.now()
+    let entry = rateLimits.get(ip)
+    if (!entry || now > entry.resetAt) {
+      entry = { count: 0, resetAt: now + 60_000 }
+      rateLimits.set(ip, entry)
+    }
+    entry.count++
+    if (entry.count > maxPerMinute) {
+      return res.status(429).json({ error: 'Too many requests. Try again in a minute.' })
+    }
+    next()
+  }
+}
+// Clean stale entries every 5 minutes
+setInterval(() => {
+  const now = Date.now()
+  for (const [ip, e] of rateLimits) if (now > e.resetAt) rateLimits.delete(ip)
+}, 5 * 60_000).unref()
 import {
   parseInput,
   resolveChannelId,
@@ -25,16 +49,22 @@ function ytKey() {
   return process.env.YOUTUBE_API_KEY
 }
 
-async function ytGet(path, params) {
+async function ytGet(path, params, timeoutMs = 8000) {
   const url = new URL(`${YT}/${path}`)
   url.searchParams.set('key', ytKey())
   for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v)
-  const res = await fetch(url.toString())
-  if (!res.ok) {
-    const body = await res.text()
-    throw new Error(`YouTube ${path} ${res.status}: ${body}`)
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
+  try {
+    const res = await fetch(url.toString(), { signal: controller.signal })
+    if (!res.ok) {
+      const body = await res.text()
+      throw new Error(`YouTube ${path} ${res.status}: ${body}`)
+    }
+    return res.json()
+  } finally {
+    clearTimeout(timer)
   }
-  return res.json()
 }
 
 let _anthropic
@@ -141,7 +171,7 @@ async function findCompetitorChannels(searchQueries, excludeChannelId) {
   }))
 }
 
-pulseRouter.post('/onboard', async (req, res) => {
+pulseRouter.post('/onboard', rateLimit(5), async (req, res) => {
   const { channelUrl } = req.body ?? {}
   if (!channelUrl?.trim()) return res.status(400).json({ error: 'channelUrl is required' })
 
@@ -186,14 +216,16 @@ pulseRouter.post('/onboard', async (req, res) => {
   }
 })
 
-// ── In-memory store (per server session) ─────────────────────────────────────
-const store = {
-  peers:   [],   // array of channelIds saved during onboarding
-  actions: {},   // recId → action ('posted' | 'skipped' | 'dismissed')
+// ── Per-channel in-memory store ───────────────────────────────────────────────
+// Keyed by channelId so different users don't share state.
+const stores = new Map() // channelId → { peers, actions }
+function getStore(channelId) {
+  if (!channelId) channelId = '__anon__'
+  if (!stores.has(channelId)) stores.set(channelId, { peers: [], actions: {} })
+  return stores.get(channelId)
 }
 
 // GET /api/pulse/profile
-// Returns a minimal profile shell; channel data lives in localStorage on client
 pulseRouter.get('/profile', (_req, res) => {
   res.json({ channelId: null, channelName: null })
 })
@@ -209,7 +241,8 @@ pulseRouter.get('/profile', (_req, res) => {
  *
  * Response: { suggestions: [{ channelId, name, subs, avatar, relevance }] }
  */
-pulseRouter.get('/discover', async (req, res) => {
+pulseRouter.get('/discover', rateLimit(5), async (req, res) => {
+  const store = getStore(req.query.channelId)
   const { channelId } = req.query
   if (!channelId) return res.status(400).json({ error: 'channelId is required' })
 
@@ -228,18 +261,6 @@ pulseRouter.get('/discover', async (req, res) => {
 
     // 4. Exclude channels already saved as peers
     const peerSet   = new Set(store.peers)
-    const suggested = all
-      .filter(ch => !peerSet.has(ch.channelId))
-      .slice(0, 15)
-      .map((ch, i) => ({
-        ...ch,
-        // Rank as relevance score 1.0 → 0.0 descending
-        relevance: parseFloat((1 - i / Math.max(suggested?.length ?? 15, 15)).toFixed(2)),
-        niche:     analysis.format,
-        genres:    analysis.genres ?? [],
-      }))
-
-    // fix self-referential relevance calc — recompute after filter
     const withRelevance = all
       .filter(ch => !peerSet.has(ch.channelId))
       .slice(0, 15)
@@ -259,24 +280,26 @@ pulseRouter.get('/discover', async (req, res) => {
 })
 
 // GET /api/pulse/peers
-pulseRouter.get('/peers', (_req, res) => {
+pulseRouter.get('/peers', (req, res) => {
+  const store = getStore(req.query.channelId)
   res.json({ peers: store.peers })
 })
 
-// PUT /api/pulse/peers  { channelIds: [...] }
+// PUT /api/pulse/peers  { channelId, channelIds: [...] }
 pulseRouter.put('/peers', (req, res) => {
-  const { channelIds } = req.body ?? {}
+  const { channelId, channelIds } = req.body ?? {}
+  const store = getStore(channelId || req.query.channelId)
   if (Array.isArray(channelIds)) {
     store.peers = channelIds.filter(id => typeof id === 'string' && id.trim())
-    console.log(`[pulse/peers] Saved ${store.peers.length} peer IDs`)
+    console.log(`[pulse/peers] ${channelId || 'anon'}: saved ${store.peers.length} peer IDs`)
   }
   res.json({ ok: true })
 })
 
-// GET /api/pulse/today
+// GET /api/pulse/today?channelId=UCxxx
 // Fetches recent videos from saved peer channels and surfaces potential picks.
-// Falls back to empty array if no peers saved yet.
-pulseRouter.get('/today', async (_req, res) => {
+pulseRouter.get('/today', rateLimit(20), async (req, res) => {
+  const store = getStore(req.query.channelId)
   if (!store.peers.length) {
     console.log('[pulse/today] No peers saved — returning empty picks')
     return res.json({ picks: [] })
@@ -366,7 +389,8 @@ pulseRouter.get('/history', (_req, res) => {
 // GET /api/pulse/opportunities
 // Finds songs trending in other-language communities that haven't been
 // picked up by the user's peer niche yet (gap = opportunity).
-pulseRouter.get('/opportunities', async (_req, res) => {
+pulseRouter.get('/opportunities', rateLimit(5), async (req, res) => {
+  const store = getStore(req.query.channelId)
   if (!store.peers.length) return res.json({ opportunities: [] })
 
   const LANG_TARGETS = [
@@ -489,7 +513,8 @@ pulseRouter.get('/opportunities', async (_req, res) => {
 
 // POST /api/pulse/recommendations/:id/action  { action }
 pulseRouter.post('/recommendations/:id/action', (req, res) => {
-  const { action } = req.body ?? {}
+  const { channelId, action } = req.body ?? {}
+  const store = getStore(channelId || req.query.channelId)
   if (action) store.actions[req.params.id] = action
   res.json({ ok: true })
 })

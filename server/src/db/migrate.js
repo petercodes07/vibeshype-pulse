@@ -1,18 +1,15 @@
-import { readFileSync } from 'fs'
-import { fileURLToPath } from 'url'
-import { dirname, join } from 'path'
-import { pool } from './pool.js'
+import 'dotenv/config'
+import { readFileSync } from 'node:fs'
+import { pool, databaseKind } from './pool.js'
 
-const __dirname = dirname(fileURLToPath(import.meta.url))
-const sql = readFileSync(join(__dirname, 'schema.sql'), 'utf8')
-
-console.log('[migrate] Running schema...')
 try {
-  await pool.query(sql)
-  console.log('[migrate] Done.')
+  if (databaseKind === 'postgres') {
+    await pool.query(readFileSync(new URL('./schema.sql', import.meta.url), 'utf8'))
+  }
+  console.log(`[migrate] ${databaseKind} schema ready`)
 } catch (err) {
   console.error('[migrate] Failed:', err.message)
-  process.exit(1)
+  process.exitCode = 1
 } finally {
   await pool.end()
 }

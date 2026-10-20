@@ -2,7 +2,7 @@ import { storage } from './storage'
 import { mockAuth, mockPulse } from './mockApi'
 
 const BASE       = import.meta.env.VITE_API_URL ?? ''
-const AUTH_BASE  = BASE
+const AUTH_BASE  = import.meta.env.VITE_AUTH_API_URL ?? BASE
 const PULSE_BASE = BASE
 const USE_MOCK   = import.meta.env.VITE_USE_MOCK === 'true'
 
@@ -88,7 +88,7 @@ async function req(path, opts = {}) {
 //   POST /api/auth/forgot-password — { email } (always 200)
 // ─────────────────────────────────────────────────────────────────────────────
 
-export const auth = USE_MOCK ? mockAuth : {
+export const auth = (USE_MOCK || import.meta.env.VITE_USE_MOCK_AUTH === 'true') ? mockAuth : {
   me:                 ()                                  => authReq('/api/auth/me'),
   updateMe:           (fields)                            => authReq('/api/auth/me',                   { method: 'PATCH', body: JSON.stringify(fields) }),
   register:           (email, password, name)             => authReq('/api/auth/register',             { method: 'POST',  body: JSON.stringify({ email, password, name, acceptedTerms: true }) }),
